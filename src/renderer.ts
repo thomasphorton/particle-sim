@@ -173,6 +173,137 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  /** Draws a highlight outline around a set of grid-index cells (e.g. a hovered flower cluster). */
+  drawClusterOutline(grid: Grid, cluster: Set<number>): void {
+    const cs = this.cellSize;
+    this.ctx.save();
+    this.ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    for (const idx of cluster) {
+      const x = idx % grid.width;
+      const y = Math.floor(idx / grid.width);
+      const left = x * cs;
+      const top = y * cs;
+      const right = left + cs;
+      const bottom = top + cs;
+
+      // Draw only boundary edges (where the neighbor is NOT in the cluster)
+      if (!cluster.has(idx - grid.width)) {
+        this.ctx.moveTo(left, top);
+        this.ctx.lineTo(right, top);
+      }
+      if (!cluster.has(idx + grid.width)) {
+        this.ctx.moveTo(left, bottom);
+        this.ctx.lineTo(right, bottom);
+      }
+      if (!cluster.has(idx - 1) || x === 0) {
+        this.ctx.moveTo(left, top);
+        this.ctx.lineTo(left, bottom);
+      }
+      if (!cluster.has(idx + 1) || x === grid.width - 1) {
+        this.ctx.moveTo(right, top);
+        this.ctx.lineTo(right, bottom);
+      }
+    }
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+
+  /** Draws a garden shears sprite at the given canvas-pixel position.
+   *  @param openness 0 = blades closed, 1 = fully open (default). */
+  drawShears(px: number, py: number, openness: number = 1): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.scale(1.5, 1.5);
+    // Offset so the sprite top-center aligns with the mouse position
+    ctx.translate(-8, 0);
+
+    const pivotX = 8;
+    const pivotY = 17;
+    // Each blade/handle rotates up to ~0.3 rad from center; openness controls spread
+    const angle = openness * 0.3;
+
+    ctx.strokeStyle = "#222";
+    ctx.lineWidth = 1;
+
+    // Left blade (rotated clockwise when open)
+    ctx.save();
+    ctx.translate(pivotX, pivotY);
+    ctx.rotate(-angle);
+    ctx.translate(-pivotX, -pivotY);
+    ctx.fillStyle = "#c0c0c0";
+    ctx.beginPath();
+    ctx.moveTo(4, 0);
+    ctx.lineTo(10, 16);
+    ctx.lineTo(7, 18);
+    ctx.lineTo(2, 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // Right blade (rotated counter-clockwise when open)
+    ctx.save();
+    ctx.translate(pivotX, pivotY);
+    ctx.rotate(angle);
+    ctx.translate(-pivotX, -pivotY);
+    ctx.fillStyle = "#ddd";
+    ctx.beginPath();
+    ctx.moveTo(12, 0);
+    ctx.lineTo(6, 16);
+    ctx.lineTo(9, 18);
+    ctx.lineTo(14, 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // Pivot
+    ctx.fillStyle = "#666";
+    ctx.beginPath();
+    ctx.arc(pivotX, pivotY, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Left handle (rotates opposite to left blade — handles spread when blades close)
+    ctx.save();
+    ctx.translate(pivotX, pivotY);
+    ctx.rotate(angle);
+    ctx.translate(-pivotX, -pivotY);
+    ctx.fillStyle = "#d06030";
+    ctx.beginPath();
+    ctx.moveTo(6, 19);
+    ctx.quadraticCurveTo(2, 26, 0, 32);
+    ctx.quadraticCurveTo(-1, 35, 1, 35);
+    ctx.quadraticCurveTo(4, 34, 6, 28);
+    ctx.lineTo(8, 21);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // Right handle (rotates opposite to right blade)
+    ctx.save();
+    ctx.translate(pivotX, pivotY);
+    ctx.rotate(-angle);
+    ctx.translate(-pivotX, -pivotY);
+    ctx.fillStyle = "#b84820";
+    ctx.beginPath();
+    ctx.moveTo(10, 19);
+    ctx.quadraticCurveTo(14, 26, 16, 32);
+    ctx.quadraticCurveTo(17, 35, 15, 35);
+    ctx.quadraticCurveTo(12, 34, 10, 28);
+    ctx.lineTo(8, 21);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
   /** Draws a translucent outline of an object's footprint centered on grid cell (gx, gy). */
   drawObjectPreview(
     gx: number,

@@ -1,5 +1,6 @@
 import { Grid } from "./grid";
 import { MATERIALS, MaterialId } from "./materials";
+import { harvestFlowerCluster } from "./harvest";
 import { state } from "./state";
 
 /** Wires pointer events on `canvas` to paint or stamp the selected material into `grid`. */
@@ -13,6 +14,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
     const scaleY = canvas.height / rect.height;
     const px = (clientX - rect.left) * scaleX;
     const py = (clientY - rect.top) * scaleY;
+    state.hoverPixel = { x: px, y: py };
     return { x: Math.floor(px / cellSize), y: Math.floor(py / cellSize) };
   };
 
@@ -67,6 +69,14 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
 
   const start = (clientX: number, clientY: number) => {
     const pos = toGrid(clientX, clientY);
+    // Clicking a bloomed flower harvests it instead of painting
+    if (harvestFlowerCluster(grid, pos.x, pos.y)) {
+      state.inventory.flowers++;
+      if (state.hoverPixel) {
+        state.snip = { px: state.hoverPixel.x, py: state.hoverPixel.y, startTime: performance.now() };
+      }
+      return;
+    }
     if (MATERIALS[state.selectedMaterial].placement.kind === "object") {
       stampObjectAt(pos.x, pos.y);
       painting = false;
@@ -95,6 +105,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
   canvas.addEventListener("mousemove", (e) => move(e.clientX, e.clientY));
   canvas.addEventListener("mouseleave", () => {
     state.hover = null;
+    state.hoverPixel = null;
   });
   window.addEventListener("mouseup", end);
 
