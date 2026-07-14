@@ -37,6 +37,8 @@ export function step(grid: Grid): void {
             updateFaucet(grid, x, y);
           } else if (id === MaterialId.Dirt) {
             updateDirt(grid, x, y);
+          } else if (id === MaterialId.Flower) {
+            updateFlower(grid, x, y);
           }
           break;
         // Gas (empty) cells never act on their own.
@@ -156,11 +158,47 @@ function updateSeed(grid: Grid, x: number, y: number, density: number): void {
   }
 }
 
+/** Finds an adjacent dirt cell with moisture and drains 1 from it. Returns true if found. */
+function drainNearbyDirt(grid: Grid, x: number, y: number): boolean {
+  for (const [dx, dy] of ORTHOGONAL_NEIGHBORS) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (grid.get(nx, ny) === MaterialId.Dirt) {
+      const m = grid.getVx(nx, ny);
+      if (m > 0) {
+        grid.setVx(nx, ny, m - 1);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Per-step chance an established (non-growing) stem or flower cell tries to
+// consume moisture from adjacent dirt to stay alive.
+const PLANT_THIRST_CHANCE = 0.002;
+// Per-step chance a thirsty plant cell (no moisture available) withers and dies.
+const PLANT_WITHER_CHANCE = 0.005;
+
 /** Grows a stem upward one segment at a time until its budget runs out, then blooms. */
 function updateStemGrowth(grid: Grid, x: number, y: number): void {
   const budget = grid.getVx(x, y);
-  if (budget <= 0) return;
+
+  // Non-growing stem: occasionally consume moisture or wither
+  if (budget <= 0) {
+    if (Math.random() < PLANT_THIRST_CHANCE) {
+      if (!drainNearbyDirt(grid, x, y) && Math.random() < PLANT_WITHER_CHANCE / PLANT_THIRST_CHANCE) {
+        grid.set(x, y, MaterialId.Empty);
+        grid.markUpdated(x, y);
+      }
+    }
+    return;
+  }
+
   if (Math.random() >= STEM_GROW_CHANCE) return;
+
+  // Growing stem consumes moisture to grow
+  if (!drainNearbyDirt(grid, x, y)) return;
 
   const above = grid.get(x, y - 1);
   const canGrowInto = above === MaterialId.Empty || above === MaterialId.Water;
@@ -209,6 +247,15 @@ function bloom(grid: Grid, x: number, y: number): void {
   ];
   for (const [dx, dy] of outer) {
     place(x + dx, y + dy, 15 + ((Math.random() * 10) | 0));
+  }
+}
+
+/** Flower cells occasionally consume moisture from nearby dirt or wither. */
+function updateFlower(grid: Grid, x: number, y: number): void {
+  if (Math.random() >= PLANT_THIRST_CHANCE) return;
+  if (!drainNearbyDirt(grid, x, y) && Math.random() < PLANT_WITHER_CHANCE / PLANT_THIRST_CHANCE) {
+    grid.set(x, y, MaterialId.Empty);
+    grid.markUpdated(x, y);
   }
 }
 
