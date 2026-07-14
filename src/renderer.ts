@@ -91,11 +91,33 @@ export class Renderer {
     this.ctx.save();
     for (const cloud of this.clouds) {
       const x = (((cloud.baseX + t * cloud.speed) % wrap) + wrap) % wrap - 150;
+
+      // Bottom shadow layer — shifted down, darker and wider
+      this.ctx.fillStyle = `rgba(60, 40, 60, ${cloud.opacity * 0.25})`;
+      this.ctx.beginPath();
+      for (const puff of cloud.puffs) {
+        const sr = puff.r * 1.05;
+        this.ctx.moveTo(x + puff.dx + sr, cloud.y + puff.dy + 6);
+        this.ctx.arc(x + puff.dx, cloud.y + puff.dy + 6, sr, 0, Math.PI * 2);
+      }
+      this.ctx.fill();
+
+      // Main cloud body
       this.ctx.fillStyle = `rgba(255, 248, 240, ${cloud.opacity})`;
       this.ctx.beginPath();
       for (const puff of cloud.puffs) {
         this.ctx.moveTo(x + puff.dx + puff.r, cloud.y + puff.dy);
         this.ctx.arc(x + puff.dx, cloud.y + puff.dy, puff.r, 0, Math.PI * 2);
+      }
+      this.ctx.fill();
+
+      // Top highlight — shifted up, smaller, brighter
+      this.ctx.fillStyle = `rgba(255, 255, 255, ${cloud.opacity * 0.35})`;
+      this.ctx.beginPath();
+      for (const puff of cloud.puffs) {
+        const hr = puff.r * 0.65;
+        this.ctx.moveTo(x + puff.dx - 2 + hr, cloud.y + puff.dy - 5);
+        this.ctx.arc(x + puff.dx - 2, cloud.y + puff.dy - 5, hr, 0, Math.PI * 2);
       }
       this.ctx.fill();
     }
