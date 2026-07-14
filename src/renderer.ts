@@ -222,8 +222,8 @@ export class Renderer {
 
     const pivotX = 8;
     const pivotY = 17;
-    // Each blade/handle rotates up to ~0.55 rad from center; openness controls spread
-    const angle = openness * 0.55;
+    // Each blade/handle rotates up to ~0.3 rad from center; openness controls spread
+    const angle = openness * 0.3;
 
     ctx.strokeStyle = "#222";
     ctx.lineWidth = 1;
