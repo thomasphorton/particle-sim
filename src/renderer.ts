@@ -3,9 +3,16 @@ import { FLOWER_PALETTE, MATERIALS, MaterialId } from "./materials";
 import type { ObjectPlacement } from "./materials";
 
 interface CloudPuff {
-  dx: number; // offset in grid cells
+  dx: number; // base offset in grid cells
   dy: number;
-  r: number;  // radius in grid cells
+  r: number;  // base radius in grid cells
+  // Animation parameters for organic morphing
+  phaseX: number;
+  phaseY: number;
+  phaseR: number;
+  freqX: number;
+  freqY: number;
+  freqR: number;
 }
 
 interface Cloud {
@@ -72,6 +79,12 @@ export class Renderer {
           dx: (Math.random() - 0.5) * 24,
           dy: (Math.random() - 0.5) * 4,
           r: 4 + Math.random() * 6,
+          phaseX: Math.random() * Math.PI * 2,
+          phaseY: Math.random() * Math.PI * 2,
+          phaseR: Math.random() * Math.PI * 2,
+          freqX: 0.15 + Math.random() * 0.2,
+          freqY: 0.2 + Math.random() * 0.25,
+          freqR: 0.1 + Math.random() * 0.15,
         });
       }
       clouds.push({
@@ -110,19 +123,28 @@ export class Renderer {
       // Bottom shadow — shifted down, darker
       cctx.fillStyle = `rgba(60, 40, 60, ${cloud.opacity * 0.3})`;
       for (const puff of cloud.puffs) {
-        this.fillPixelCircle(cctx, cx + puff.dx, cloud.y + puff.dy + 1.5, puff.r * 1.05, gw, gh);
+        const ax = puff.dx + Math.sin(t * puff.freqX + puff.phaseX) * 1.5;
+        const ay = puff.dy + Math.sin(t * puff.freqY + puff.phaseY) * 0.8;
+        const ar = puff.r + Math.sin(t * puff.freqR + puff.phaseR) * 1.0;
+        this.fillPixelCircle(cctx, cx + ax, cloud.y + ay + 1.5, ar * 1.05, gw, gh);
       }
 
       // Main cloud body
       cctx.fillStyle = `rgba(255, 248, 240, ${cloud.opacity})`;
       for (const puff of cloud.puffs) {
-        this.fillPixelCircle(cctx, cx + puff.dx, cloud.y + puff.dy, puff.r, gw, gh);
+        const ax = puff.dx + Math.sin(t * puff.freqX + puff.phaseX) * 1.5;
+        const ay = puff.dy + Math.sin(t * puff.freqY + puff.phaseY) * 0.8;
+        const ar = puff.r + Math.sin(t * puff.freqR + puff.phaseR) * 1.0;
+        this.fillPixelCircle(cctx, cx + ax, cloud.y + ay, ar, gw, gh);
       }
 
       // Top highlight — shifted up, smaller, brighter
       cctx.fillStyle = `rgba(255, 255, 255, ${cloud.opacity * 0.35})`;
       for (const puff of cloud.puffs) {
-        this.fillPixelCircle(cctx, cx + puff.dx, cloud.y + puff.dy - 1, puff.r * 0.6, gw, gh);
+        const ax = puff.dx + Math.sin(t * puff.freqX + puff.phaseX) * 1.5;
+        const ay = puff.dy + Math.sin(t * puff.freqY + puff.phaseY) * 0.8;
+        const ar = puff.r + Math.sin(t * puff.freqR + puff.phaseR) * 1.0;
+        this.fillPixelCircle(cctx, cx + ax, cloud.y + ay - 1, ar * 0.6, gw, gh);
       }
     }
 
