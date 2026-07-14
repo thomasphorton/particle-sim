@@ -143,15 +143,39 @@ const SEED_DESPAWN_CHANCE = 0.003;
 function updateSeed(grid: Grid, x: number, y: number, density: number): void {
   if (tryFallPowder(grid, x, y, density)) return;
 
-  // Check for adjacent wet dirt to germinate
+  // Seeds can push through grass — replace the grass cell below
+  const below = grid.get(x, y + 1);
+  if (below === MaterialId.Grass) {
+    moveCell(grid, x, y, x, y + 1);
+    // The grass cell is now at (x, y) — overwrite it with empty
+    grid.set(x, y, MaterialId.Empty);
+    grid.markUpdated(x, y);
+    return;
+  }
+
+  // Check for adjacent wet dirt (or wet dirt through grass) to germinate
   for (const [dx, dy] of SEED_GERMINATION_NEIGHBORS) {
     const nx = x + dx;
     const ny = y + dy;
-    if (grid.get(nx, ny) === MaterialId.Dirt && grid.getVx(nx, ny) > 0) {
+    const nid = grid.get(nx, ny);
+    if (nid === MaterialId.Dirt && grid.getVx(nx, ny) > 0) {
       grid.set(x, y, MaterialId.Stem);
       grid.setVx(x, y, randomStemBudget());
       grid.markUpdated(x, y);
       return;
+    }
+    // Grass sitting on wet dirt also counts
+    if (nid === MaterialId.Grass) {
+      for (const [ddx, ddy] of ORTHOGONAL_NEIGHBORS) {
+        const nnx = nx + ddx;
+        const nny = ny + ddy;
+        if (grid.get(nnx, nny) === MaterialId.Dirt && grid.getVx(nnx, nny) > 0) {
+          grid.set(x, y, MaterialId.Stem);
+          grid.setVx(x, y, randomStemBudget());
+          grid.markUpdated(x, y);
+          return;
+        }
+      }
     }
   }
 
