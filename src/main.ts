@@ -44,12 +44,17 @@ function loop(): void {
       if (!hasFlower) hoveredCluster = null;
     }
   }
+  // Determine if hovering a faucet
+  const hoveringFaucet = state.hover && grid.get(state.hover.x, state.hover.y) === MaterialId.Faucet;
+
   if (hoveredCluster) {
     renderer.drawClusterOutline(grid, hoveredCluster);
     canvas.style.cursor = "none";
     if (state.hoverPixel) {
       renderer.drawShears(state.hoverPixel.x, state.hoverPixel.y);
     }
+  } else if (hoveringFaucet) {
+    canvas.style.cursor = "pointer";
   } else {
     canvas.style.cursor = "";
   }
@@ -67,7 +72,7 @@ function loop(): void {
   }
 
   const material = MATERIALS[state.selectedMaterial];
-  if (state.hover && material.placement.kind === "object") {
+  if (state.hover && !hoveringFaucet && material.placement.kind === "object") {
     renderer.drawObjectPreview(state.hover.x, state.hover.y, material.placement, material.color);
   }
 
