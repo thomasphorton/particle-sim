@@ -22,74 +22,6 @@ const canvas = document.querySelector<HTMLCanvasElement>("#sim-canvas")!;
 const renderer = new Renderer(canvas, grid, CELL_SIZE);
 attachInput(canvas, grid, CELL_SIZE);
 
-// Generate a garden shears cursor as a PNG data URL via an offscreen canvas
-function buildShearsCursor(): string {
-  const size = 32;
-  const c = document.createElement("canvas");
-  c.width = size;
-  c.height = size;
-  const ctx = c.getContext("2d")!;
-
-  // Blades
-  ctx.fillStyle = "#c0c0c0";
-  ctx.strokeStyle = "#333";
-  ctx.lineWidth = 0.7;
-  ctx.beginPath();
-  ctx.moveTo(8, 1);
-  ctx.lineTo(16, 13);
-  ctx.lineTo(14, 15);
-  ctx.lineTo(6, 3);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = "#d4d4d4";
-  ctx.beginPath();
-  ctx.moveTo(22, 1);
-  ctx.lineTo(14, 13);
-  ctx.lineTo(16, 15);
-  ctx.lineTo(24, 3);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // Pivot screw
-  ctx.fillStyle = "#777";
-  ctx.beginPath();
-  ctx.arc(15, 14, 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // Left handle
-  ctx.fillStyle = "#d06030";
-  ctx.beginPath();
-  ctx.moveTo(13, 16);
-  ctx.quadraticCurveTo(9, 22, 7, 28);
-  ctx.quadraticCurveTo(6, 31, 8, 31);
-  ctx.quadraticCurveTo(11, 30, 13, 24);
-  ctx.lineTo(15, 17);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // Right handle
-  ctx.fillStyle = "#c05020";
-  ctx.beginPath();
-  ctx.moveTo(17, 16);
-  ctx.quadraticCurveTo(21, 22, 23, 28);
-  ctx.quadraticCurveTo(24, 31, 22, 31);
-  ctx.quadraticCurveTo(19, 30, 17, 24);
-  ctx.lineTo(15, 17);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  return c.toDataURL("image/png");
-}
-
-const shearsDataUrl = buildShearsCursor();
-const shearsCursor = `url(${shearsDataUrl}) 6 2, crosshair`;
-
 function loop(): void {
   if (!state.paused) {
     step(grid);
@@ -114,7 +46,10 @@ function loop(): void {
   }
   if (hoveredCluster) {
     renderer.drawClusterOutline(grid, hoveredCluster);
-    canvas.style.cursor = shearsCursor;
+    canvas.style.cursor = "none";
+    if (state.hoverPixel) {
+      renderer.drawShears(state.hoverPixel.x, state.hoverPixel.y);
+    }
   } else {
     canvas.style.cursor = "";
   }

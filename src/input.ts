@@ -14,6 +14,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
     const scaleY = canvas.height / rect.height;
     const px = (clientX - rect.left) * scaleX;
     const py = (clientY - rect.top) * scaleY;
+    state.hoverPixel = { x: px, y: py };
     return { x: Math.floor(px / cellSize), y: Math.floor(py / cellSize) };
   };
 
@@ -101,6 +102,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
   canvas.addEventListener("mousemove", (e) => move(e.clientX, e.clientY));
   canvas.addEventListener("mouseleave", () => {
     state.hover = null;
+    state.hoverPixel = null;
   });
   window.addEventListener("mouseup", end);
 

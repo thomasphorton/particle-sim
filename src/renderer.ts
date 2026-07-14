@@ -210,6 +210,69 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  /** Draws a garden shears sprite at the given canvas-pixel position. */
+  drawShears(px: number, py: number): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(px, py);
+
+    // Blades
+    ctx.fillStyle = "#c0c0c0";
+    ctx.strokeStyle = "#222";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(10, 16);
+    ctx.lineTo(7, 18);
+    ctx.lineTo(-2, 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#ddd";
+    ctx.beginPath();
+    ctx.moveTo(16, 0);
+    ctx.lineTo(6, 16);
+    ctx.lineTo(9, 18);
+    ctx.lineTo(18, 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Pivot
+    ctx.fillStyle = "#666";
+    ctx.beginPath();
+    ctx.arc(8, 17, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Left handle
+    ctx.fillStyle = "#d06030";
+    ctx.beginPath();
+    ctx.moveTo(6, 19);
+    ctx.quadraticCurveTo(2, 26, 0, 32);
+    ctx.quadraticCurveTo(-1, 35, 1, 35);
+    ctx.quadraticCurveTo(4, 34, 6, 28);
+    ctx.lineTo(8, 21);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Right handle
+    ctx.fillStyle = "#b84820";
+    ctx.beginPath();
+    ctx.moveTo(10, 19);
+    ctx.quadraticCurveTo(14, 26, 16, 32);
+    ctx.quadraticCurveTo(17, 35, 15, 35);
+    ctx.quadraticCurveTo(12, 34, 10, 28);
+    ctx.lineTo(8, 21);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
   /** Draws a translucent outline of an object's footprint centered on grid cell (gx, gy). */
   drawObjectPreview(
     gx: number,
