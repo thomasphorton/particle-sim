@@ -61,11 +61,11 @@ function canDisplace(target: MaterialId, movingDensity: number): boolean {
 const MAX_STEM_SKIP = 8;
 
 /**
- * Walks from (x, y) in direction (dx, dy), skipping over any stem cells in the
- * way, and returns the first non-stem cell found. Stems are thin plant growth
- * and shouldn't dam up liquid, but liquid should never actually displace them.
+ * Walks from (x, y) in direction (dx, dy), skipping over any stem or flower
+ * cells in the way, and returns the first non-plant cell found. Plant cells
+ * shouldn't dam up liquid, but liquid should never actually displace them.
  */
-function skipStems(
+function skipPlants(
   grid: Grid,
   x: number,
   y: number,
@@ -76,7 +76,7 @@ function skipStems(
   let cy = y + dy;
   for (let i = 0; i < MAX_STEM_SKIP; i++) {
     const id = grid.get(cx, cy);
-    if (id !== MaterialId.Stem) return { x: cx, y: cy, id };
+    if (id !== MaterialId.Stem && id !== MaterialId.Flower) return { x: cx, y: cy, id };
     cx += dx;
     cy += dy;
   }
@@ -406,7 +406,7 @@ function updateLiquid(
     }
   }
 
-  const below = skipStems(grid, x, y, 0, 1);
+  const below = skipPlants(grid, x, y, 0, 1);
   if (canDisplace(below.id, density)) {
     const vx = grid.getVx(x, y);
     const driftDir = vx !== 0 ? (vx > 0 ? 1 : -1) : randDir();
@@ -414,7 +414,7 @@ function updateLiquid(
     // (inertia from spreading along a ledge before it dropped), plus rare
     // random turbulence, instead of always snapping straight down.
     if ((vx !== 0 && Math.random() < DRIFT_APPLY_CHANCE) || Math.random() < FALL_TURBULENCE_CHANCE) {
-      const diag = skipStems(grid, x, y, driftDir, 1);
+      const diag = skipPlants(grid, x, y, driftDir, 1);
       if (canDisplace(diag.id, density)) {
         moveCell(grid, x, y, diag.x, diag.y);
         grid.setVx(diag.x, diag.y, Math.random() < DRIFT_DECAY_CHANCE ? 0 : driftDir);
@@ -428,7 +428,7 @@ function updateLiquid(
 
   const dir = randDir();
   for (const dx of [dir, -dir] as const) {
-    const diag = skipStems(grid, x, y, dx, 1);
+    const diag = skipPlants(grid, x, y, dx, 1);
     if (canDisplace(diag.id, density)) {
       moveCell(grid, x, y, diag.x, diag.y);
       // Decayed like the other fall-related writes, so a diagonal drop doesn't
@@ -447,7 +447,7 @@ function updateLiquid(
       const target = grid.get(x + dx * step, y);
       if (target === MaterialId.Empty) {
         farthest = step;
-      } else if (target === MaterialId.Stem) {
+      } else if (target === MaterialId.Stem || target === MaterialId.Flower) {
         continue;
       } else {
         break;
