@@ -173,6 +173,43 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  /** Draws a highlight outline around a set of grid-index cells (e.g. a hovered flower cluster). */
+  drawClusterOutline(grid: Grid, cluster: Set<number>): void {
+    const cs = this.cellSize;
+    this.ctx.save();
+    this.ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    for (const idx of cluster) {
+      const x = idx % grid.width;
+      const y = Math.floor(idx / grid.width);
+      const left = x * cs;
+      const top = y * cs;
+      const right = left + cs;
+      const bottom = top + cs;
+
+      // Draw only boundary edges (where the neighbor is NOT in the cluster)
+      if (!cluster.has(idx - grid.width)) {
+        this.ctx.moveTo(left, top);
+        this.ctx.lineTo(right, top);
+      }
+      if (!cluster.has(idx + grid.width)) {
+        this.ctx.moveTo(left, bottom);
+        this.ctx.lineTo(right, bottom);
+      }
+      if (!cluster.has(idx - 1) || x === 0) {
+        this.ctx.moveTo(left, top);
+        this.ctx.lineTo(left, bottom);
+      }
+      if (!cluster.has(idx + 1) || x === grid.width - 1) {
+        this.ctx.moveTo(right, top);
+        this.ctx.lineTo(right, bottom);
+      }
+    }
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+
   /** Draws a translucent outline of an object's footprint centered on grid cell (gx, gy). */
   drawObjectPreview(
     gx: number,

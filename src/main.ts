@@ -6,6 +6,7 @@ import { attachInput } from "./input";
 import { buildUi } from "./ui";
 import { state } from "./state";
 import { MATERIALS, MaterialId } from "./materials";
+import { findFlowerCluster } from "./harvest";
 
 const CELL_SIZE = 5;
 const GRID_WIDTH = 320;
@@ -26,6 +27,26 @@ function loop(): void {
     step(grid);
   }
   renderer.draw(grid);
+
+  // Highlight hovered flower/stem cluster
+  let hoveredCluster: Set<number> | null = null;
+  if (state.hover) {
+    hoveredCluster = findFlowerCluster(grid, state.hover.x, state.hover.y);
+    // Only highlight clusters that contain at least one bloomed flower
+    if (hoveredCluster) {
+      let hasFlower = false;
+      for (const idx of hoveredCluster) {
+        if ((grid.ids[idx] as MaterialId) === MaterialId.Flower) {
+          hasFlower = true;
+          break;
+        }
+      }
+      if (!hasFlower) hoveredCluster = null;
+    }
+  }
+  if (hoveredCluster) {
+    renderer.drawClusterOutline(grid, hoveredCluster);
+  }
 
   const material = MATERIALS[state.selectedMaterial];
   if (state.hover && material.placement.kind === "object") {
