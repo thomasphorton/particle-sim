@@ -222,8 +222,8 @@ export class Renderer {
 
     const pivotX = 8;
     const pivotY = 17;
-    // Each blade rotates up to ~0.25 rad from center; openness controls spread
-    const bladeAngle = openness * 0.25;
+    // Each blade/handle rotates up to ~0.55 rad from center; openness controls spread
+    const angle = openness * 0.55;
 
     ctx.strokeStyle = "#222";
     ctx.lineWidth = 1;
@@ -231,7 +231,7 @@ export class Renderer {
     // Left blade (rotated clockwise when open)
     ctx.save();
     ctx.translate(pivotX, pivotY);
-    ctx.rotate(-bladeAngle);
+    ctx.rotate(-angle);
     ctx.translate(-pivotX, -pivotY);
     ctx.fillStyle = "#c0c0c0";
     ctx.beginPath();
@@ -247,7 +247,7 @@ export class Renderer {
     // Right blade (rotated counter-clockwise when open)
     ctx.save();
     ctx.translate(pivotX, pivotY);
-    ctx.rotate(bladeAngle);
+    ctx.rotate(angle);
     ctx.translate(-pivotX, -pivotY);
     ctx.fillStyle = "#ddd";
     ctx.beginPath();
@@ -267,7 +267,11 @@ export class Renderer {
     ctx.fill();
     ctx.stroke();
 
-    // Left handle
+    // Left handle (rotates opposite to left blade — handles spread when blades close)
+    ctx.save();
+    ctx.translate(pivotX, pivotY);
+    ctx.rotate(angle);
+    ctx.translate(-pivotX, -pivotY);
     ctx.fillStyle = "#d06030";
     ctx.beginPath();
     ctx.moveTo(6, 19);
@@ -278,8 +282,13 @@ export class Renderer {
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
+    ctx.restore();
 
-    // Right handle
+    // Right handle (rotates opposite to right blade)
+    ctx.save();
+    ctx.translate(pivotX, pivotY);
+    ctx.rotate(-angle);
+    ctx.translate(-pivotX, -pivotY);
     ctx.fillStyle = "#b84820";
     ctx.beginPath();
     ctx.moveTo(10, 19);
@@ -290,6 +299,7 @@ export class Renderer {
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
+    ctx.restore();
 
     ctx.restore();
   }
