@@ -387,15 +387,28 @@ function updateDirt(grid: Grid, x: number, y: number): void {
   const moisture = grid.getVx(x, y);
 
   // Absorb adjacent water — dirt soaks it up and gains max moisture
+  // Also looks through grass layers for water (grass is permeable)
   if (moisture < DIRT_MAX_MOISTURE) {
     for (const [dx, dy] of ORTHOGONAL_NEIGHBORS) {
       const nx = x + dx;
       const ny = y + dy;
-      if (grid.get(nx, ny) === MaterialId.Water) {
+      const nid = grid.get(nx, ny);
+      if (nid === MaterialId.Water) {
         grid.set(nx, ny, MaterialId.Empty);
         grid.markUpdated(nx, ny);
         grid.setVx(x, y, DIRT_MAX_MOISTURE);
         return;
+      }
+      // Check through grass: if neighbor is grass, look one cell further
+      if (nid === MaterialId.Grass) {
+        const fx = nx + dx;
+        const fy = ny + dy;
+        if (grid.get(fx, fy) === MaterialId.Water) {
+          grid.set(fx, fy, MaterialId.Empty);
+          grid.markUpdated(fx, fy);
+          grid.setVx(x, y, DIRT_MAX_MOISTURE);
+          return;
+        }
       }
     }
   }
