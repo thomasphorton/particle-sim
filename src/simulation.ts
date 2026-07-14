@@ -158,9 +158,9 @@ function updateSeed(grid: Grid, x: number, y: number, density: number): void {
   }
 }
 
-/** Searches nearby cells (through stems) for dirt with moisture and drains 1. */
+/** BFS through connected stem/flower cells to find reachable dirt with moisture. */
 function drainNearbyDirt(grid: Grid, x: number, y: number): boolean {
-  // Direct neighbors first
+  // Direct neighbors first (fast path)
   for (const [dx, dy] of ORTHOGONAL_NEIGHBORS) {
     const nx = x + dx;
     const ny = y + dy;
@@ -169,19 +169,43 @@ function drainNearbyDirt(grid: Grid, x: number, y: number): boolean {
       return true;
     }
   }
-  // Check 2 cells away (through adjacent stem/flower) to reach dirt below
+  // Walk through connected plant cells to reach distant dirt
+  const visited = new Set<number>();
+  const queue: number[] = [];
+  const key = (cx: number, cy: number) => cy * grid.width + cx;
+  const k0 = key(x, y);
+  visited.add(k0);
+  // Seed with adjacent stem/flower neighbors
   for (const [dx, dy] of ORTHOGONAL_NEIGHBORS) {
-    const mx = x + dx;
-    const my = y + dy;
-    const mid = grid.get(mx, my);
-    if (mid !== MaterialId.Stem && mid !== MaterialId.Flower) continue;
-    for (const [dx2, dy2] of ORTHOGONAL_NEIGHBORS) {
-      const nx = mx + dx2;
-      const ny = my + dy2;
-      if (nx === x && ny === y) continue;
-      if (grid.get(nx, ny) === MaterialId.Dirt && grid.getVx(nx, ny) > 0) {
+    const nx = x + dx;
+    const ny = y + dy;
+    const id = grid.get(nx, ny);
+    if (id === MaterialId.Stem || id === MaterialId.Flower) {
+      const k = key(nx, ny);
+      if (!visited.has(k)) {
+        visited.add(k);
+        queue.push(k);
+      }
+    }
+  }
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    const cx = cur % grid.width;
+    const cy = (cur - cx) / grid.width;
+    for (const [dx, dy] of ORTHOGONAL_NEIGHBORS) {
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if (!grid.inBounds(nx, ny)) continue;
+      const k = key(nx, ny);
+      if (visited.has(k)) continue;
+      const id = grid.get(nx, ny);
+      if (id === MaterialId.Dirt && grid.getVx(nx, ny) > 0) {
         grid.setVx(nx, ny, grid.getVx(nx, ny) - 1);
         return true;
+      }
+      if (id === MaterialId.Stem || id === MaterialId.Flower) {
+        visited.add(k);
+        queue.push(k);
       }
     }
   }
