@@ -215,6 +215,7 @@ export class Renderer {
     const ctx = this.ctx;
     ctx.save();
     ctx.translate(px, py);
+    ctx.scale(1.5, 1.5);
 
     // Blades
     ctx.fillStyle = "#c0c0c0";
