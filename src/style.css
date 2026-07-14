@@ -110,6 +110,25 @@ h1 {
   border-color: var(--accent);
 }
 
+.inventory-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inventory-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #262832;
+  color: var(--text);
+  font-size: 13px;
+  user-select: none;
+}
+
 #sim-canvas {
   border: 1px solid var(--border);
   border-radius: 8px;

@@ -78,6 +78,21 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
 
   actionGroup.append(pauseBtn, clearBtn);
 
-  toolbar.append(materialGroup, brushGroup, actionGroup);
+  // Inventory display
+  const inventoryGroup = document.createElement("div");
+  inventoryGroup.className = "inventory-group";
+  const flowerCount = document.createElement("span");
+  flowerCount.className = "inventory-item";
+  flowerCount.textContent = "🌸 0";
+  inventoryGroup.appendChild(flowerCount);
+
+  // Poll inventory state each frame (cheap, no events needed)
+  const updateInventory = () => {
+    flowerCount.textContent = `🌸 ${state.inventory.flowers}`;
+    requestAnimationFrame(updateInventory);
+  };
+  requestAnimationFrame(updateInventory);
+
+  toolbar.append(materialGroup, brushGroup, actionGroup, inventoryGroup);
   root.appendChild(toolbar);
 }

@@ -2,6 +2,70 @@ import { Grid } from "./grid";
 import { MATERIALS, MaterialId } from "./materials";
 import { state } from "./state";
 
+/** Flood-fill collects all connected Flower cells, removes them and their stems, and increments inventory. */
+function harvestFlower(grid: Grid, startX: number, startY: number): boolean {
+  if (grid.get(startX, startY) !== MaterialId.Flower) return false;
+
+  // BFS to find all connected flower cells
+  const flowerCells: [number, number][] = [];
+  const visited = new Set<number>();
+  const queue: [number, number][] = [[startX, startY]];
+  const key = (x: number, y: number) => y * grid.width + x;
+
+  visited.add(key(startX, startY));
+  while (queue.length > 0) {
+    const [x, y] = queue.shift()!;
+    flowerCells.push([x, y]);
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as const) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!grid.inBounds(nx, ny)) continue;
+      const k = key(nx, ny);
+      if (visited.has(k)) continue;
+      if (grid.get(nx, ny) === MaterialId.Flower) {
+        visited.add(k);
+        queue.push([nx, ny]);
+      }
+    }
+  }
+
+  // Remove all flower cells
+  for (const [x, y] of flowerCells) {
+    grid.set(x, y, MaterialId.Empty);
+  }
+
+  // Find stem cells directly below the flower cluster and flood-fill remove them
+  const stemQueue: [number, number][] = [];
+  for (const [x, y] of flowerCells) {
+    const below = y + 1;
+    if (grid.inBounds(x, below) && grid.get(x, below) === MaterialId.Stem) {
+      const k = key(x, below);
+      if (!visited.has(k)) {
+        visited.add(k);
+        stemQueue.push([x, below]);
+      }
+    }
+  }
+  while (stemQueue.length > 0) {
+    const [x, y] = stemQueue.shift()!;
+    grid.set(x, y, MaterialId.Empty);
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as const) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!grid.inBounds(nx, ny)) continue;
+      const k = key(nx, ny);
+      if (visited.has(k)) continue;
+      if (grid.get(nx, ny) === MaterialId.Stem) {
+        visited.add(k);
+        stemQueue.push([nx, ny]);
+      }
+    }
+  }
+
+  state.inventory.flowers++;
+  return true;
+}
+
 /** Wires pointer events on `canvas` to paint or stamp the selected material into `grid`. */
 export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: number): void {
   let painting = false;
@@ -67,6 +131,8 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
 
   const start = (clientX: number, clientY: number) => {
     const pos = toGrid(clientX, clientY);
+    // Clicking a bloomed flower harvests it instead of painting
+    if (harvestFlower(grid, pos.x, pos.y)) return;
     if (MATERIALS[state.selectedMaterial].placement.kind === "object") {
       stampObjectAt(pos.x, pos.y);
       painting = false;

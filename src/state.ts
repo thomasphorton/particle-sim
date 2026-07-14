@@ -1,11 +1,16 @@
 import { MaterialId } from "./materials";
 
+export interface Inventory {
+  flowers: number;
+}
+
 export interface SimState {
   selectedMaterial: MaterialId;
   brushSize: number;
   paused: boolean;
   /** Grid-space cursor position, for the placement preview. Null when the pointer is off-canvas. */
   hover: { x: number; y: number } | null;
+  inventory: Inventory;
 }
 
 export const state: SimState = {
@@ -13,4 +18,5 @@ export const state: SimState = {
   brushSize: 4,
   paused: false,
   hover: null,
+  inventory: { flowers: 0 },
 };
