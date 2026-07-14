@@ -61,8 +61,8 @@ function canDisplace(target: MaterialId, movingDensity: number): boolean {
 const MAX_STEM_SKIP = 8;
 
 /**
- * Walks from (x, y) in direction (dx, dy), skipping over any stem or flower
- * cells in the way, and returns the first non-plant cell found. Plant cells
+ * Walks from (x, y) in direction (dx, dy), skipping over any permeable cells
+ * in the way, and returns the first non-permeable cell found. Permeable solids
  * shouldn't dam up liquid, but liquid should never actually displace them.
  */
 function skipPlants(
@@ -76,7 +76,7 @@ function skipPlants(
   let cy = y + dy;
   for (let i = 0; i < MAX_STEM_SKIP; i++) {
     const id = grid.get(cx, cy);
-    if (id !== MaterialId.Stem && id !== MaterialId.Flower) return { x: cx, y: cy, id };
+    if (!MATERIALS[id].permeable) return { x: cx, y: cy, id };
     cx += dx;
     cy += dy;
   }
@@ -447,7 +447,7 @@ function updateLiquid(
       const target = grid.get(x + dx * step, y);
       if (target === MaterialId.Empty) {
         farthest = step;
-      } else if (target === MaterialId.Stem || target === MaterialId.Flower) {
+      } else if (MATERIALS[target].permeable) {
         continue;
       } else {
         break;

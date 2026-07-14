@@ -46,6 +46,8 @@ export interface Material {
   density: number;
   /** Liquids: how many cells sideways it may try to flow per step. */
   flowRate?: number;
+  /** If true, liquid flows through this cell as if it were empty. */
+  permeable?: boolean;
   placement: Placement;
 }
 
@@ -121,6 +123,7 @@ export const MATERIALS: Record<MaterialId, Material> = {
     colorVariance: 10,
     phase: MaterialPhase.Solid,
     density: Infinity,
+    permeable: true,
     placement: { kind: "brush" },
   },
   [MaterialId.Flower]: {
@@ -130,6 +133,7 @@ export const MATERIALS: Record<MaterialId, Material> = {
     colorVariance: 18,
     phase: MaterialPhase.Solid,
     density: Infinity,
+    permeable: true,
     placement: { kind: "brush" },
   },
   [MaterialId.Drain]: {
