@@ -123,19 +123,18 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
   const mineInFront = () => {
     const char = state.character;
     if (!char) return;
-    // Elliptical mining area: 3 wide, character height + 3 tall
-    const rx = 1.5; // horizontal radius
-    const ry = (char.height + 3) / 2; // vertical radius
-    const cx = Math.floor(char.x + (char.facing === 1 ? char.width : -1) + char.facing * rx);
-    const cy = Math.floor(char.y + char.height / 2);
+    // Simple rectangle: 4 wide × 8 tall, flush against character edge
+    const mineW = 4;
+    const mineH = char.height + 3;
+    const baseX = char.facing === 1
+      ? Math.floor(char.x + char.width)
+      : Math.floor(char.x) - mineW;
+    const baseY = Math.floor(char.y) - 1;
 
-    const ix = Math.ceil(rx);
-    const iy = Math.ceil(ry);
-    for (let dy = -iy; dy <= iy; dy++) {
-      for (let dx = -ix; dx <= ix; dx++) {
-        if ((dx / rx) ** 2 + (dy / ry) ** 2 > 1) continue;
-        const x = cx + (char.facing === 1 ? dx : -dx);
-        const y = cy + dy;
+    for (let dy = 0; dy < mineH; dy++) {
+      for (let dx = 0; dx < mineW; dx++) {
+        const x = baseX + dx;
+        const y = baseY + dy;
         if (!grid.inBounds(x, y)) continue;
         const id = grid.get(x, y) as MaterialId;
         if (id === MaterialId.Empty) continue;
