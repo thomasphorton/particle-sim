@@ -1,6 +1,7 @@
 import { Grid } from "./grid";
 import { MATERIALS, MaterialId } from "./materials";
 import { state } from "./state";
+import type { HotbarItem } from "./state";
 
 const PALETTE: MaterialId[] = [
   MaterialId.Sand,
@@ -89,13 +90,13 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
   const placeBtn = document.createElement("button");
   placeBtn.textContent = "🖌️ Place";
   const pickaxeBtn = document.createElement("button");
-  pickaxeBtn.textContent = "⛏️ Mine";
+  pickaxeBtn.textContent = "🎮 Play";
 
-  const toolBtns = [editorBtn, placeBtn, pickaxeBtn];
+  const toolBtns = [editorBtn, pickaxeBtn];
   const setToolMode = (mode: typeof state.toolMode, active: HTMLButtonElement) => {
     state.toolMode = mode;
     for (const btn of toolBtns) btn.classList.toggle("active", btn === active);
-    const showPalette = mode === "editor" || mode === "place";
+    const showPalette = mode === "editor";
     materialGroup.style.display = showPalette ? "" : "none";
     brushGroup.style.display = showPalette ? "" : "none";
     if (!showPalette) {
@@ -107,36 +108,131 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
     }
   };
   editorBtn.addEventListener("click", () => setToolMode("editor", editorBtn));
-  placeBtn.addEventListener("click", () => setToolMode("place", placeBtn));
-  pickaxeBtn.addEventListener("click", () => setToolMode("pickaxe", pickaxeBtn));
+  pickaxeBtn.addEventListener("click", () => setToolMode("play", pickaxeBtn));
   // Apply initial mode visibility and button states
   setToolMode(state.toolMode, pickaxeBtn);
-  toolGroup.append(editorBtn, placeBtn, pickaxeBtn);
+  toolGroup.append(editorBtn, pickaxeBtn);
 
-  // Inventory display
-  const inventoryGroup = document.createElement("div");
-  inventoryGroup.className = "inventory-group";
-  const flowerCount = document.createElement("span");
-  flowerCount.className = "inventory-item";
-  flowerCount.textContent = "🌸 0";
-  const mineCount = document.createElement("span");
-  mineCount.className = "inventory-item";
-  mineCount.textContent = "";
-  inventoryGroup.append(flowerCount, mineCount);
-
-  // Poll inventory state each frame (cheap, no events needed)
-  const updateInventory = () => {
-    flowerCount.textContent = `🌸 ${state.inventory.flowers}`;
-    const items: string[] = [];
-    for (const [key, val] of Object.entries(state.inventory)) {
-      if (key === "flowers" || val === 0) continue;
-      items.push(`${key}: ${val}`);
-    }
-    mineCount.textContent = items.join(" | ");
-    requestAnimationFrame(updateInventory);
+  // Flower counter
+  const flowerCounter = document.createElement("span");
+  flowerCounter.className = "flower-counter";
+  flowerCounter.textContent = "🌸 0";
+  const updateFlowerCounter = () => {
+    flowerCounter.textContent = `🌸 ${state.inventory.flowers}`;
+    requestAnimationFrame(updateFlowerCounter);
   };
-  requestAnimationFrame(updateInventory);
+  requestAnimationFrame(updateFlowerCounter);
 
-  toolbar.append(materialGroup, brushGroup, toolGroup, actionGroup, inventoryGroup);
+  toolbar.append(materialGroup, brushGroup, toolGroup, actionGroup, flowerCounter);
   root.appendChild(toolbar);
+
+  // --- Hotbar (below canvas) ---
+  const hotbar = document.createElement("div");
+  hotbar.className = "hotbar";
+
+  const MATERIAL_EMOJI: Partial<Record<MaterialId, string>> = {
+    [MaterialId.Sand]: "🟡",
+    [MaterialId.Water]: "💧",
+    [MaterialId.Dirt]: "🟤",
+    [MaterialId.Wall]: "⬜",
+    [MaterialId.Stone]: "🪨",
+    [MaterialId.Wood]: "🪵",
+    [MaterialId.Seed]: "🌱",
+    [MaterialId.Faucet]: "🚰",
+    [MaterialId.Sprinkler]: "💦",
+    [MaterialId.Drain]: "🕳️",
+  };
+
+  function slotLabel(item: HotbarItem): string {
+    if (item.kind === "pickaxe") return "⛏️";
+    if (item.kind === "material") return MATERIAL_EMOJI[item.materialId] ?? "▪️";
+    return "";
+  }
+
+  function slotCount(item: HotbarItem): string {
+    if (item.kind === "material" && item.count > 1) return String(item.count);
+    return "";
+  }
+
+  const slotElements: HTMLButtonElement[] = [];
+  const iconElements: HTMLSpanElement[] = [];
+  const countElements: HTMLSpanElement[] = [];
+
+  for (let i = 0; i < 10; i++) {
+    const slot = document.createElement("button");
+    slot.className = "hotbar-slot";
+    const keyLabel = document.createElement("span");
+    keyLabel.className = "hotbar-key";
+    keyLabel.textContent = String((i + 1) % 10);
+    const icon = document.createElement("span");
+    icon.className = "hotbar-icon";
+    const count = document.createElement("span");
+    count.className = "hotbar-count";
+    slot.append(keyLabel, icon, count);
+    slot.addEventListener("click", () => selectSlot(i));
+    slotElements.push(slot);
+    iconElements.push(icon);
+    countElements.push(count);
+    hotbar.appendChild(slot);
+  }
+
+  function refreshHotbarSlots(): void {
+    for (let i = 0; i < 10; i++) {
+      const item = state.hotbar[i];
+      iconElements[i].textContent = slotLabel(item);
+      countElements[i].textContent = slotCount(item);
+      slotElements[i].classList.toggle("active", i === state.activeSlot);
+    }
+  }
+
+  function selectSlot(index: number): void {
+    state.activeSlot = index;
+    for (let j = 0; j < slotElements.length; j++) {
+      slotElements[j].classList.toggle("active", j === index);
+    }
+    // Auto-switch tool mode based on item
+    const item = state.hotbar[index];
+    if (item.kind === "pickaxe" || item.kind === "material") {
+      setToolMode("play", pickaxeBtn);
+    }
+  }
+
+  // Refresh hotbar display each frame
+  const updateHotbar = () => {
+    refreshHotbarSlots();
+    requestAnimationFrame(updateHotbar);
+  };
+  requestAnimationFrame(updateHotbar);
+
+  // Initial selection
+  selectSlot(state.activeSlot);
+
+  // Number keys 1-0 select hotbar slots
+  window.addEventListener("keydown", (e) => {
+    const target = e.target as HTMLElement | null;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")) return;
+    const key = e.key;
+    if (key >= "1" && key <= "9") {
+      selectSlot(parseInt(key) - 1);
+      e.preventDefault();
+    } else if (key === "0") {
+      selectSlot(9);
+      e.preventDefault();
+    }
+  });
+
+  // Scroll wheel cycles hotbar slots
+  window.addEventListener("wheel", (e) => {
+    const dir = e.deltaY > 0 ? 1 : e.deltaY < 0 ? -1 : 0;
+    if (dir === 0) return;
+    e.preventDefault();
+    const next = ((state.activeSlot + dir) % 10 + 10) % 10;
+    selectSlot(next);
+  }, { passive: false });
+
+  // Insert hotbar after canvas
+  const canvas = document.querySelector("#sim-canvas");
+  if (canvas && canvas.parentElement) {
+    canvas.parentElement.insertBefore(hotbar, canvas.nextSibling);
+  }
 }

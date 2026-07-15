@@ -496,6 +496,72 @@ export class Renderer {
     this.ctx.stroke();
     this.ctx.restore();
   }
+
+  /**
+   * Draw an inventory placement preview: material-colored cells tinted
+   * green (in range) or red (out of range).
+   */
+  drawInventoryPreview(
+    gx: number,
+    gy: number,
+    materialId: MaterialId,
+    charCx: number,
+    charCy: number,
+    placementRadius: number,
+    brushSize: number,
+  ): void {
+    const cs = this.cellSize;
+    const mat = MATERIALS[materialId];
+    const [mr, mg, mb] = mat.color;
+
+    this.ctx.save();
+    if (mat.placement.kind === "object") {
+      const { shape, width, height } = mat.placement;
+      const halfW = width / 2;
+      const halfH = height / 2;
+      // Check if ALL cells are in range
+      let allInRange = true;
+      const cells: [number, number][] = [];
+      for (let dy = -Math.floor(halfH); dy < height - Math.floor(halfH); dy++) {
+        for (let dx = -Math.floor(halfW); dx < width - Math.floor(halfW); dx++) {
+          if (shape === "circle" && (dx / halfW) ** 2 + (dy / halfH) ** 2 > 1) continue;
+          const cx = gx + dx;
+          const cy = gy + dy;
+          cells.push([cx, cy]);
+          const ddx = cx - charCx;
+          const ddy = cy - charCy;
+          if (ddx * ddx + ddy * ddy > placementRadius * placementRadius) allInRange = false;
+        }
+      }
+      const tint = allInRange ? [0, 180, 0] : [200, 0, 0];
+      const r = Math.round((mr + tint[0]) / 2);
+      const g = Math.round((mg + tint[1]) / 2);
+      const b = Math.round((mb + tint[2]) / 2);
+      this.ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.5)`;
+      for (const [cx, cy] of cells) {
+        this.ctx.fillRect(cx * cs, cy * cs, cs, cs);
+      }
+    } else {
+      const rad = brushSize;
+      for (let dy = -rad; dy <= rad; dy++) {
+        for (let dx = -rad; dx <= rad; dx++) {
+          if (dx * dx + dy * dy > rad * rad) continue;
+          const cx = gx + dx;
+          const cy = gy + dy;
+          const ddx = cx - charCx;
+          const ddy = cy - charCy;
+          const inRange = ddx * ddx + ddy * ddy <= placementRadius * placementRadius;
+          const tint = inRange ? [0, 180, 0] : [200, 0, 0];
+          const r = Math.round((mr + tint[0]) / 2);
+          const g = Math.round((mg + tint[1]) / 2);
+          const b = Math.round((mb + tint[2]) / 2);
+          this.ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.5)`;
+          this.ctx.fillRect(cx * cs, cy * cs, cs, cs);
+        }
+      }
+    }
+    this.ctx.restore();
+  }
 }
 
 function clamp(v: number): number {

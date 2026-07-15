@@ -1,7 +1,7 @@
 import { Grid } from "./grid";
 import { MATERIALS, MaterialId } from "./materials";
 import { harvestFlowerCluster } from "./harvest";
-import { state } from "./state";
+import { state, hasPickaxeEquipped, addToHotbar, getActiveHotbarMaterial, removeFromActiveSlot } from "./state";
 import { startSwing } from "./character";
 
 /** Maximum placement distance from character center (in grid cells). */
@@ -34,6 +34,16 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
     return { x: Math.floor(px / cellSize), y: Math.floor(py / cellSize) };
   };
 
+  /** Returns true if placing `matId` can overwrite what's currently at (x, y). */
+  const canPlaceOver = (x: number, y: number, matId: MaterialId): boolean => {
+    const existing = grid.get(x, y);
+    if (existing === MaterialId.Empty) return true;
+    if (matId === MaterialId.Empty) return true;
+    // Impermeable materials displace water
+    if (existing === MaterialId.Water && !MATERIALS[matId].permeable) return true;
+    return false;
+  };
+
   const paintAt = (gx: number, gy: number) => {
     if (!withinPlacementRange(gx, gy)) return;
     const r = state.brushSize;
@@ -45,7 +55,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
         const y = gy + dy;
         if (!grid.inBounds(x, y)) continue;
         if (!withinPlacementRange(x, y)) continue;
-        if (material === MaterialId.Empty || grid.get(x, y) === MaterialId.Empty) {
+        if (canPlaceOver(x, y, material)) {
           grid.set(x, y, material);
         }
       }
@@ -130,7 +140,6 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
     let mineW: number, mineH: number, baseX: number, baseY: number;
 
     if (char.crouching) {
-      // Crouched: dig more downward — wider horizontally, shifted below feet
       mineW = 5;
       mineH = 5;
       baseX = char.facing === 1
@@ -138,13 +147,11 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
         : Math.floor(char.x) - mineW + 1;
       baseY = Math.floor(char.y + char.height);
     } else if (char.lookingUp) {
-      // Looking up: dig above the character
       mineW = 5;
       mineH = 5;
       baseX = Math.floor(char.x + char.width / 2) - 2;
       baseY = Math.floor(char.y) - mineH;
     } else {
-      // Standing: dig in front — 4 wide × 8 tall
       mineW = 4;
       mineH = char.height + 3;
       baseX = char.facing === 1
@@ -153,18 +160,107 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
       baseY = Math.floor(char.y) - 3;
     }
 
+    // Track which cells have already been mined (to avoid double-counting flood-filled objects)
+    const mined = new Set<number>();
+    const cellKey = (x: number, y: number) => y * grid.width + x;
+
     for (let dy = 0; dy < mineH; dy++) {
       for (let dx = 0; dx < mineW; dx++) {
         const x = baseX + dx;
         const y = baseY + dy;
         if (!grid.inBounds(x, y)) continue;
+        if (mined.has(cellKey(x, y))) continue;
         const id = grid.get(x, y) as MaterialId;
-        if (id === MaterialId.Empty) continue;
+        if (id === MaterialId.Empty || id === MaterialId.Water) continue;
         const mat = MATERIALS[id];
+
+        // Object-type materials: flood-fill to remove the whole object as one item
+        if (mat.placement.kind === "object") {
+          const queue: [number, number][] = [[x, y]];
+          mined.add(cellKey(x, y));
+          while (queue.length > 0) {
+            const [cx, cy] = queue.shift()!;
+            grid.set(cx, cy, MaterialId.Empty);
+            grid.markUpdated(cx, cy);
+            for (const [nx, ny] of [[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]] as const) {
+              if (!grid.inBounds(nx, ny)) continue;
+              const k = cellKey(nx, ny);
+              if (mined.has(k)) continue;
+              if (grid.get(nx, ny) === id) {
+                mined.add(k);
+                queue.push([nx, ny]);
+              }
+            }
+          }
+          // One item per whole object
+          addToHotbar(id);
+          const name = mat.name.toLowerCase();
+          state.inventory[name] = (state.inventory[name] || 0) + 1;
+          continue;
+        }
+
+        mined.add(cellKey(x, y));
         const name = mat.name.toLowerCase();
         state.inventory[name] = (state.inventory[name] || 0) + 1;
+        // Add minable materials to hotbar (skip non-placeable things like stems/flowers/grass)
+        if (id !== MaterialId.Stem && id !== MaterialId.Flower && id !== MaterialId.Grass) {
+          addToHotbar(id);
+        }
         grid.set(x, y, MaterialId.Empty);
         grid.markUpdated(x, y);
+      }
+    }
+  };
+
+  /** Place a single cell from the active hotbar material slot. */
+  const placeFromHotbar = (gx: number, gy: number) => {
+    const hotbarMat = getActiveHotbarMaterial();
+    if (!hotbarMat) return;
+    if (!withinPlacementRange(gx, gy)) return;
+
+    const materialId = hotbarMat.materialId;
+    const matDef = MATERIALS[materialId];
+
+    if (matDef.placement.kind === "object") {
+      const { shape, width, height } = matDef.placement;
+      const halfW = width / 2;
+      const halfH = height / 2;
+      // Check all cells are in range first
+      for (let dy = -Math.floor(halfH); dy < height - Math.floor(halfH); dy++) {
+        for (let dx = -Math.floor(halfW); dx < width - Math.floor(halfW); dx++) {
+          if (shape === "circle" && (dx / halfW) ** 2 + (dy / halfH) ** 2 > 1) continue;
+          const x = gx + dx;
+          const y = gy + dy;
+          if (!grid.inBounds(x, y) || !withinPlacementRange(x, y)) return;
+        }
+      }
+      // Consume one item for the whole object
+      if (!removeFromActiveSlot()) return;
+      for (let dy = -Math.floor(halfH); dy < height - Math.floor(halfH); dy++) {
+        for (let dx = -Math.floor(halfW); dx < width - Math.floor(halfW); dx++) {
+          if (shape === "circle" && (dx / halfW) ** 2 + (dy / halfH) ** 2 > 1) continue;
+          const x = gx + dx;
+          const y = gy + dy;
+          if (!grid.inBounds(x, y)) continue;
+          if (!canPlaceOver(x, y, materialId)) continue;
+          grid.set(x, y, materialId);
+          if (materialId === MaterialId.Faucet) grid.setVx(x, y, 1);
+        }
+      }
+    } else {
+      // Brush-paint
+      const r = state.brushSize;
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (dx * dx + dy * dy > r * r) continue;
+          const x = gx + dx;
+          const y = gy + dy;
+          if (!grid.inBounds(x, y)) continue;
+          if (!withinPlacementRange(x, y)) continue;
+          if (!canPlaceOver(x, y, materialId)) continue;
+          if (!removeFromActiveSlot()) return; // ran out
+          grid.set(x, y, materialId);
+        }
       }
     }
   };
@@ -177,18 +273,32 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
     const harvested = harvestFlowerCluster(grid, pos.x, pos.y);
     if (harvested > 0) {
       state.inventory.flowers += harvested;
+      // Add seeds to hotbar (1 per bloom + 10% chance of bonus seed)
+      for (let i = 0; i < harvested; i++) {
+        addToHotbar(MaterialId.Seed);
+        if (Math.random() < 0.1) addToHotbar(MaterialId.Seed);
+      }
       if (state.hoverPixel) {
         state.snip = { px: state.hoverPixel.x, py: state.hoverPixel.y, startTime: performance.now() };
       }
       return;
     }
-    if (state.toolMode === "pickaxe") {
+    if (state.toolMode === "play" && hasPickaxeEquipped()) {
       mineInFront();
       if (state.character) startSwing(state.character);
       painting = false;
       lastGridPos = null;
       return;
     }
+    // Place from hotbar material slot (works in play mode)
+    if (state.toolMode === "play" && getActiveHotbarMaterial()) {
+      placeFromHotbar(pos.x, pos.y);
+      painting = false;
+      lastGridPos = null;
+      return;
+    }
+    // In play mode, don't allow free painting — must use inventory
+    if (state.toolMode === "play") return;
     if (MATERIALS[state.selectedMaterial].placement.kind === "object") {
       stampObjectAt(pos.x, pos.y);
       painting = false;
