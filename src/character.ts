@@ -234,18 +234,21 @@ export function updateCharacter(char: Character, grid: Grid, dt: number): void {
 
   // Swimming: space to swim upward (repeatable, no jumpHeld gate)
   if (char.swimming && keys.jump) {
-    // Check if near the surface (top row of character is not water)
+    // Check if near the surface (top 2 rows of character are not fully submerged)
     const headY = Math.floor(char.y);
     const x0 = Math.floor(char.x);
     const x1 = Math.floor(char.x + char.width - 0.01);
-    let headInWater = false;
-    for (let gx = x0; gx <= x1; gx++) {
-      if (grid.inBounds(gx, headY) && grid.get(gx, headY) === MaterialId.Water) {
-        headInWater = true;
-        break;
+    let waterInTopRows = 0;
+    for (let rowOff = 0; rowOff <= 1; rowOff++) {
+      for (let gx = x0; gx <= x1; gx++) {
+        if (grid.inBounds(gx, headY + rowOff) && grid.get(gx, headY + rowOff) === MaterialId.Water) {
+          waterInTopRows++;
+        }
       }
     }
-    if (!headInWater && !jumpHeld) {
+    // Near surface if fewer than half of top 2 rows are water
+    const topCellCount = (x1 - x0 + 1) * 2;
+    if (waterInTopRows <= topCellCount / 2 && !jumpHeld) {
       // Near surface — do a full jump out of the water
       char.vy = JUMP_VELOCITY;
       jumpHeld = true;
