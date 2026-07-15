@@ -32,10 +32,10 @@ const MAX_FALL = 5;         // cells/frame (terminal velocity)
 const COYOTE_TIME_S = 5 / BASE_FPS; // ~83ms coyote window
 
 // Swimming constants
-const SWIM_GRAVITY = 0.1;       // reduced gravity underwater
-const SWIM_MAX_FALL = 1.5;      // slower sinking
+const SWIM_GRAVITY = 0.05;       // reduced gravity underwater
+const SWIM_MAX_FALL = 0.75;      // slower sinking
 const SWIM_MOVE_SPEED = 0.7;    // slower horizontal movement
-const SWIM_UP_VELOCITY = -2.0;  // swim upward impulse (repeatable)
+const SWIM_UP_VELOCITY = -1.0;  // swim upward impulse (repeatable)
 
 /** Returns true if the given grid cell is solid ground the character can stand on. */
 function isSolid(grid: Grid, gx: number, gy: number): boolean {
