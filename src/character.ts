@@ -189,13 +189,8 @@ export function drawCharacter(
   cellSize: number,
 ): void {
   const px = Math.round(char.x * cellSize);
-  let py = Math.round(char.y * cellSize);
+  const py = Math.round(char.y * cellSize);
   const cs = cellSize;
-
-  // When crouching, shift body down by 1 cell and hide legs
-  if (char.crouching) {
-    py += cs;
-  }
 
   // Simple character: 3 wide x 5 tall
   // Head (row 0-1): skin colored
@@ -207,13 +202,14 @@ export function drawCharacter(
   const pants = "#3a5a3a";
   const hair = "#5a3322";
 
-  if (char.lookingUp) {
-    // Rotate the head (top 2 rows) backward to look up
+  if (char.lookingUp || char.crouching) {
+    // Rotate the head (top 2 rows): backward for look-up, forward for crouch
+    const tiltDir = char.lookingUp ? -1 : 1;
     ctx.save();
     const headCx = px + cs * 1.5;
     const headCy = py + cs * 2; // pivot at neck
     ctx.translate(headCx, headCy);
-    ctx.rotate(-0.4 * char.facing); // tilt back relative to facing direction
+    ctx.rotate(0.4 * tiltDir * char.facing);
     ctx.translate(-headCx, -headCy);
     ctx.fillStyle = hair;
     ctx.fillRect(px, py, cs * 3, cs);
@@ -249,12 +245,10 @@ export function drawCharacter(
   ctx.fillStyle = shirt;
   ctx.fillRect(px, py + cs * 2, cs * 3, cs * 2);
 
-  // Legs / pants (hidden when crouching)
-  if (!char.crouching) {
-    ctx.fillStyle = pants;
-    ctx.fillRect(px, py + cs * 4, cs, cs);
-    ctx.fillRect(px + cs * 2, py + cs * 4, cs, cs);
-  }
+  // Legs / pants
+  ctx.fillStyle = pants;
+  ctx.fillRect(px, py + cs * 4, cs, cs);
+  ctx.fillRect(px + cs * 2, py + cs * 4, cs, cs);
 
   // Pickaxe swing animation
   if (char.swingStart !== null) {
