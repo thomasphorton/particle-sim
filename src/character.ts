@@ -14,6 +14,8 @@ export interface Character {
   swingStart: number | null;
   /** Frames since last grounded (for coyote time). */
   airFrames: number;
+  /** Whether the character is crouching. */
+  crouching: boolean;
 }
 
 const GRAVITY = 0.4;
@@ -58,6 +60,7 @@ export function createCharacter(grid: Grid): Character {
     facing: 1,
     swingStart: null,
     airFrames: 0,
+    crouching: false,
   };
 }
 
@@ -65,9 +68,10 @@ export interface CharacterInput {
   left: boolean;
   right: boolean;
   jump: boolean;
+  crouch: boolean;
 }
 
-const keys: CharacterInput = { left: false, right: false, jump: false };
+const keys: CharacterInput = { left: false, right: false, jump: false, crouch: false };
 let jumpHeld = false;
 
 export function attachCharacterInput(): void {
@@ -75,6 +79,7 @@ export function attachCharacterInput(): void {
     if (e.key === "ArrowLeft" || e.key === "a") keys.left = true;
     if (e.key === "ArrowRight" || e.key === "d") keys.right = true;
     if (e.key === "ArrowUp" || e.key === "w" || e.key === " ") keys.jump = true;
+    if (e.key === "ArrowDown" || e.key === "s") keys.crouch = true;
   });
   window.addEventListener("keyup", (e) => {
     if (e.key === "ArrowLeft" || e.key === "a") keys.left = false;
@@ -83,10 +88,14 @@ export function attachCharacterInput(): void {
       keys.jump = false;
       jumpHeld = false;
     }
+    if (e.key === "ArrowDown" || e.key === "s") keys.crouch = false;
   });
 }
 
 export function updateCharacter(char: Character, grid: Grid): void {
+  // Crouch state
+  char.crouching = keys.crouch;
+
   // Horizontal movement
   let moveX = 0;
   if (keys.left) { moveX -= MOVE_SPEED; char.facing = -1; }
@@ -167,8 +176,13 @@ export function drawCharacter(
   cellSize: number,
 ): void {
   const px = Math.round(char.x * cellSize);
-  const py = Math.round(char.y * cellSize);
+  let py = Math.round(char.y * cellSize);
   const cs = cellSize;
+
+  // When crouching, shift sprite down 2 cells (visually squatting)
+  if (char.crouching) {
+    py += cs * 2;
+  }
 
   // Simple character: 3 wide x 5 tall
   // Head (row 0-1): skin colored
