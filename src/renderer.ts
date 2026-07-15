@@ -176,6 +176,10 @@ export class Renderer {
     }
   }
 
+  getCtx(): CanvasRenderingContext2D {
+    return this.ctx;
+  }
+
   draw(grid: Grid): void {
     const data = this.imageData.data;
     for (let i = 0; i < grid.ids.length; i++) {

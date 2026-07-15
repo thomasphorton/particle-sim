@@ -7,6 +7,7 @@ import { buildUi } from "./ui";
 import { state } from "./state";
 import { MATERIALS, MaterialId } from "./materials";
 import { findFlowerCluster } from "./harvest";
+import { createCharacter, attachCharacterInput, updateCharacter, drawCharacter } from "./character";
 
 const CELL_SIZE = 5;
 const GRID_WIDTH = 320;
@@ -21,11 +22,16 @@ const canvas = document.querySelector<HTMLCanvasElement>("#sim-canvas")!;
 const renderer = new Renderer(canvas, grid, CELL_SIZE);
 attachInput(canvas, grid, CELL_SIZE);
 
+const character = createCharacter(grid);
+attachCharacterInput();
+
 function loop(): void {
   if (!state.paused) {
     step(grid);
+    updateCharacter(character, grid);
   }
   renderer.draw(grid);
+  drawCharacter(renderer.getCtx(), character, CELL_SIZE);
 
   // Highlight hovered flower/stem cluster
   let hoveredCluster: Set<number> | null = null;

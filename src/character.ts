@@ -1,0 +1,189 @@
+import { Grid } from "./grid";
+import { MATERIALS, MaterialId, MaterialPhase } from "./materials";
+
+export interface Character {
+  x: number; // grid position (float for smooth movement)
+  y: number;
+  vx: number;
+  vy: number;
+  width: number;  // hitbox in grid cells
+  height: number;
+  grounded: boolean;
+  facing: -1 | 1;
+}
+
+const GRAVITY = 0.4;
+const MOVE_SPEED = 1.2;
+const JUMP_VELOCITY = -3.5;
+const MAX_FALL = 5;
+
+/** Returns true if the given grid cell is solid ground the character can stand on. */
+function isSolid(grid: Grid, gx: number, gy: number): boolean {
+  if (!grid.inBounds(gx, gy)) return true; // treat OOB as solid (floor/walls)
+  const id = grid.get(gx, gy) as MaterialId;
+  if (id === MaterialId.Empty) return false;
+  const mat = MATERIALS[id];
+  // Solid phase or powder (sand) counts as ground
+  return mat.phase === MaterialPhase.Solid || mat.phase === MaterialPhase.Powder;
+}
+
+/** Check if a rectangular area collides with any solid cell. */
+function collidesAt(grid: Grid, x: number, y: number, w: number, h: number): boolean {
+  const x0 = Math.floor(x);
+  const x1 = Math.floor(x + w - 0.01);
+  const y0 = Math.floor(y);
+  const y1 = Math.floor(y + h - 0.01);
+  for (let gy = y0; gy <= y1; gy++) {
+    for (let gx = x0; gx <= x1; gx++) {
+      if (isSolid(grid, gx, gy)) return true;
+    }
+  }
+  return false;
+}
+
+export function createCharacter(grid: Grid): Character {
+  // Spawn at top-center, will fall to ground
+  return {
+    x: Math.floor(grid.width / 2) - 1,
+    y: 10,
+    vx: 0,
+    vy: 0,
+    width: 3,
+    height: 5,
+    grounded: false,
+    facing: 1,
+  };
+}
+
+export interface CharacterInput {
+  left: boolean;
+  right: boolean;
+  jump: boolean;
+}
+
+const keys: CharacterInput = { left: false, right: false, jump: false };
+let jumpHeld = false;
+
+export function attachCharacterInput(): void {
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft" || e.key === "a") keys.left = true;
+    if (e.key === "ArrowRight" || e.key === "d") keys.right = true;
+    if (e.key === "ArrowUp" || e.key === "w" || e.key === " ") keys.jump = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.key === "ArrowLeft" || e.key === "a") keys.left = false;
+    if (e.key === "ArrowRight" || e.key === "d") keys.right = false;
+    if (e.key === "ArrowUp" || e.key === "w" || e.key === " ") {
+      keys.jump = false;
+      jumpHeld = false;
+    }
+  });
+}
+
+export function updateCharacter(char: Character, grid: Grid): void {
+  // Horizontal movement
+  let moveX = 0;
+  if (keys.left) { moveX -= MOVE_SPEED; char.facing = -1; }
+  if (keys.right) { moveX += MOVE_SPEED; char.facing = 1; }
+
+  // Apply gravity
+  char.vy += GRAVITY;
+  if (char.vy > MAX_FALL) char.vy = MAX_FALL;
+
+  // Jump
+  if (keys.jump && char.grounded && !jumpHeld) {
+    char.vy = JUMP_VELOCITY;
+    char.grounded = false;
+    jumpHeld = true;
+  }
+
+  // Move horizontally with collision
+  const newX = char.x + moveX;
+  if (!collidesAt(grid, newX, char.y, char.width, char.height)) {
+    char.x = newX;
+  } else {
+    // Try to step up 1 cell (slope/stair climbing)
+    if (!collidesAt(grid, newX, char.y - 1, char.width, char.height)) {
+      char.x = newX;
+      char.y -= 1;
+    }
+  }
+
+  // Move vertically with collision
+  const newY = char.y + char.vy;
+  if (!collidesAt(grid, char.x, newY, char.width, char.height)) {
+    char.y = newY;
+    char.grounded = false;
+  } else {
+    // Resolve: find the nearest non-colliding position
+    if (char.vy > 0) {
+      // Falling — snap to top of ground
+      char.y = Math.floor(newY + char.height) - char.height;
+      // Fine adjustment: move up until not colliding
+      while (collidesAt(grid, char.x, char.y, char.width, char.height) && char.y > 0) {
+        char.y -= 1;
+      }
+      char.grounded = true;
+    } else {
+      // Hitting ceiling
+      char.y = Math.floor(char.y) + 1;
+    }
+    char.vy = 0;
+  }
+
+  // Clamp to grid bounds
+  if (char.x < 0) char.x = 0;
+  if (char.x + char.width > grid.width) char.x = grid.width - char.width;
+  if (char.y < 0) { char.y = 0; char.vy = 0; }
+  if (char.y + char.height > grid.height) {
+    char.y = grid.height - char.height;
+    char.vy = 0;
+    char.grounded = true;
+  }
+}
+
+/** Draw a simple pixel-art character sprite. */
+export function drawCharacter(
+  ctx: CanvasRenderingContext2D,
+  char: Character,
+  cellSize: number,
+): void {
+  const px = Math.round(char.x * cellSize);
+  const py = Math.round(char.y * cellSize);
+  const cs = cellSize;
+
+  // Simple character: 3 wide x 5 tall
+  // Head (row 0-1): skin colored
+  // Body (row 2-3): shirt
+  // Legs (row 4): pants
+
+  const skin = "#f5c5a3";
+  const shirt = "#4488cc";
+  const pants = "#3a5a3a";
+  const hair = "#5a3322";
+
+  // Hair (top of head)
+  ctx.fillStyle = hair;
+  ctx.fillRect(px, py, cs * 3, cs);
+
+  // Face
+  ctx.fillStyle = skin;
+  ctx.fillRect(px, py + cs, cs * 3, cs);
+
+  // Eyes
+  ctx.fillStyle = "#222";
+  if (char.facing === 1) {
+    ctx.fillRect(px + cs * 2, py + cs, cs, cs);
+  } else {
+    ctx.fillRect(px, py + cs, cs, cs);
+  }
+
+  // Body / shirt
+  ctx.fillStyle = shirt;
+  ctx.fillRect(px, py + cs * 2, cs * 3, cs * 2);
+
+  // Legs / pants
+  ctx.fillStyle = pants;
+  ctx.fillRect(px, py + cs * 4, cs, cs);
+  ctx.fillRect(px + cs * 2, py + cs * 4, cs, cs);
+}
