@@ -15,82 +15,123 @@ const GRID_HEIGHT = 200;
 
 const grid = new Grid(GRID_WIDTH, GRID_HEIGHT);
 
-// Seed the world with terrain, a faucet, and a drain
+// Seed the world with a starter layout (based on reference design)
 {
-  // --- Terrain generation ---
-  // Create several overlapping dirt slopes/hills using sine waves + noise
-  const terrainHeight = new Float32Array(GRID_WIDTH);
-  const baseLevel = GRID_HEIGHT - 20; // leave some room at bottom
-
-  // Layer several sine waves for organic-looking terrain
-  const hills = [
-    { freq: 0.015, amp: 25, phase: 0 },
-    { freq: 0.035, amp: 12, phase: 2.1 },
-    { freq: 0.07, amp: 6, phase: 4.7 },
-    { freq: 0.12, amp: 3, phase: 1.3 },
-  ];
-
-  // Simple seeded pseudo-random for reproducible terrain
-  let seed = 42;
-  const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
-
-  for (let x = 0; x < GRID_WIDTH; x++) {
-    let h = 0;
-    for (const hill of hills) {
-      h += Math.sin(x * hill.freq + hill.phase) * hill.amp;
-    }
-    // Add small random jitter
-    h += (rand() - 0.5) * 4;
-    terrainHeight[x] = Math.floor(baseLevel - Math.abs(h) - 15);
-  }
-
-  // Fill dirt from terrain surface down to bottom
-  for (let x = 0; x < GRID_WIDTH; x++) {
-    const top = Math.max(0, terrainHeight[x]);
-    for (let y = top; y < GRID_HEIGHT; y++) {
+  // --- Top sloped dirt shelf (river channel) ---
+  // Slopes from upper-left (~x=10,y=22) to mid-right (~x=195,y=55)
+  for (let x = 8; x < 200; x++) {
+    const progress = (x - 8) / (200 - 8);
+    const topY = Math.floor(22 + progress * 33); // slope from y=22 to y=55
+    const thickness = Math.floor(14 + Math.sin(x * 0.05) * 4); // 10-18 cells thick
+    for (let dy = 0; dy < thickness; dy++) {
+      const y = topY + dy;
       if (grid.inBounds(x, y)) {
         grid.set(x, y, MaterialId.Dirt);
       }
     }
   }
 
-  // --- Place a faucet near the top ---
-  // Faucet is 10x6, place it centered near top-left area
-  const faucetX = Math.floor(GRID_WIDTH * 0.3);
-  const faucetY = 8;
+  // --- Large middle platform ---
+  // Flat shelf from about x=25 to x=215, top at y=95
+  for (let x = 25; x < 215; x++) {
+    const topY = 95 + Math.floor(Math.sin(x * 0.03) * 2); // slight waviness
+    const thickness = 22;
+    for (let dy = 0; dy < thickness; dy++) {
+      const y = topY + dy;
+      if (grid.inBounds(x, y)) {
+        grid.set(x, y, MaterialId.Dirt);
+      }
+    }
+  }
+
+  // --- Stone boulder on middle platform ---
+  // Blob centered around (95, 82), radius ~12
+  const boulderCx = 95, boulderCy = 82, boulderR = 12;
+  for (let y = boulderCy - boulderR; y <= boulderCy + boulderR; y++) {
+    for (let x = boulderCx - boulderR; x <= boulderCx + boulderR; x++) {
+      const dx = x - boulderCx, dy = y - boulderCy;
+      // Slightly irregular shape
+      const r = boulderR + Math.sin(Math.atan2(dy, dx) * 5) * 2;
+      if (dx * dx + dy * dy <= r * r && grid.inBounds(x, y)) {
+        grid.set(x, y, MaterialId.Stone);
+      }
+    }
+  }
+
+  // --- Wood plank on the right ---
+  // About x=200-250, y=105, size 48x6
+  for (let dy = 0; dy < 6; dy++) {
+    for (let dx = 0; dx < 48; dx++) {
+      const x = 200 + dx, y = 105 + dy;
+      if (grid.inBounds(x, y)) {
+        grid.set(x, y, MaterialId.Wood);
+      }
+    }
+  }
+
+  // --- Bottom terrain (diagonal slope) ---
+  // Surface goes from about (0, 168) sloping down to (200, 195)
+  for (let x = 0; x < 220; x++) {
+    const progress = x / 220;
+    const surfaceY = Math.floor(168 + progress * 27);
+    for (let y = surfaceY; y < GRID_HEIGHT; y++) {
+      if (grid.inBounds(x, y) && grid.get(x, y) === MaterialId.Empty) {
+        grid.set(x, y, MaterialId.Dirt);
+      }
+    }
+  }
+
+  // --- Stone mountain (bottom-right) ---
+  // Triangle peak at (265, 110), base from (230, 170) to (300, 170)
+  const peakX = 265, peakY = 110, mtnBaseY = 172;
+  const mtnHalfBase = 35;
+  for (let y = peakY; y <= mtnBaseY; y++) {
+    const progress = (y - peakY) / (mtnBaseY - peakY);
+    const halfW = Math.floor(progress * mtnHalfBase);
+    for (let x = peakX - halfW; x <= peakX + halfW; x++) {
+      if (grid.inBounds(x, y)) {
+        grid.set(x, y, MaterialId.Stone);
+      }
+    }
+  }
+  // Dirt below the mountain base
+  for (let x = peakX - mtnHalfBase; x <= peakX + mtnHalfBase; x++) {
+    for (let y = mtnBaseY + 1; y < GRID_HEIGHT; y++) {
+      if (grid.inBounds(x, y) && grid.get(x, y) === MaterialId.Empty) {
+        grid.set(x, y, MaterialId.Dirt);
+      }
+    }
+  }
+
+  // --- Faucet at top-left ---
+  // 10x6 object near top
+  const faucetX = 18, faucetY = 2;
   for (let dy = 0; dy < 6; dy++) {
     for (let dx = 0; dx < 10; dx++) {
-      const x = faucetX + dx;
-      const y = faucetY + dy;
+      const x = faucetX + dx, y = faucetY + dy;
       if (grid.inBounds(x, y)) {
         grid.set(x, y, MaterialId.Faucet);
       }
     }
   }
 
-  // --- Place a drain at the bottom ---
-  // Drain is 32x6, place it centered at the bottom
-  const drainX = Math.floor(GRID_WIDTH / 2) - 16;
-  const drainY = GRID_HEIGHT - 6;
+  // --- Drain at bottom-left ---
+  // 32x6 object at bottom-left corner
+  const drainX = 0, drainY = GRID_HEIGHT - 12;
   for (let dy = 0; dy < 6; dy++) {
-    for (let dx = 0; dx < 32; dx++) {
-      const x = drainX + dx;
-      const y = drainY + dy;
+    for (let dx = 0; dx < 20; dx++) {
+      const x = drainX + dx, y = drainY + dy;
       if (grid.inBounds(x, y)) {
-        // Clear dirt first, then place drain
         grid.set(x, y, MaterialId.Drain);
       }
     }
   }
 
-  // Carve out a small basin above the drain so water can reach it
-  for (let dy = 1; dy <= 8; dy++) {
-    const halfW = 16 + dy * 2; // wider at top
-    for (let dx = -halfW; dx <= halfW; dx++) {
-      const x = Math.floor(GRID_WIDTH / 2) + dx;
-      const y = GRID_HEIGHT - 6 - dy;
+  // --- Sand patch near the drain ---
+  for (let x = 20; x < 60; x++) {
+    for (let y = GRID_HEIGHT - 15; y < GRID_HEIGHT; y++) {
       if (grid.inBounds(x, y) && grid.get(x, y) === MaterialId.Dirt) {
-        grid.set(x, y, MaterialId.Empty);
+        grid.set(x, y, MaterialId.Sand);
       }
     }
   }
