@@ -23,6 +23,7 @@ const renderer = new Renderer(canvas, grid, CELL_SIZE);
 attachInput(canvas, grid, CELL_SIZE);
 
 const character = createCharacter(grid);
+state.character = character;
 attachCharacterInput();
 
 function loop(): void {

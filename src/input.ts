@@ -3,6 +3,20 @@ import { MATERIALS, MaterialId } from "./materials";
 import { harvestFlowerCluster } from "./harvest";
 import { state } from "./state";
 
+/** Maximum placement distance from character center (in grid cells). */
+const PLACEMENT_RADIUS = 30;
+
+/** Returns true if the grid position is within placement range of the character. */
+function withinPlacementRange(gx: number, gy: number): boolean {
+  const char = state.character;
+  if (!char) return true; // no character yet, allow all
+  const cx = char.x + char.width / 2;
+  const cy = char.y + char.height / 2;
+  const dx = gx - cx;
+  const dy = gy - cy;
+  return dx * dx + dy * dy <= PLACEMENT_RADIUS * PLACEMENT_RADIUS;
+}
+
 /** Wires pointer events on `canvas` to paint or stamp the selected material into `grid`. */
 export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: number): void {
   let painting = false;
@@ -19,6 +33,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
   };
 
   const paintAt = (gx: number, gy: number) => {
+    if (!withinPlacementRange(gx, gy)) return;
     const r = state.brushSize;
     const material = state.selectedMaterial;
     for (let dy = -r; dy <= r; dy++) {
@@ -51,6 +66,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
   // Stamps a whole fixed-size shape centered on (gx, gy) in one shot, for materials
   // placed as discrete objects (e.g. a wood plank or a stone boulder) rather than painted.
   const stampObjectAt = (gx: number, gy: number) => {
+    if (!withinPlacementRange(gx, gy)) return;
     const material = MATERIALS[state.selectedMaterial];
     if (material.placement.kind !== "object") return;
     const { shape, width, height } = material.placement;

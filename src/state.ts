@@ -1,4 +1,5 @@
 import { MaterialId } from "./materials";
+import type { Character } from "./character";
 
 export interface Inventory {
   flowers: number;
@@ -21,6 +22,8 @@ export interface SimState {
   inventory: Inventory;
   /** Active snip animation, if any. */
   snip: SnipAnimation | null;
+  /** The player character. */
+  character: Character | null;
 }
 
 export const state: SimState = {
@@ -31,4 +34,5 @@ export const state: SimState = {
   hoverPixel: null,
   inventory: { flowers: 0 },
   snip: null,
+  character: null,
 };
