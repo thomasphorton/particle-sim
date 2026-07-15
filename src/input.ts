@@ -134,6 +134,12 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
         ? Math.floor(char.x + char.width) - 1
         : Math.floor(char.x) - mineW + 1;
       baseY = Math.floor(char.y + char.height);
+    } else if (char.lookingUp) {
+      // Looking up: dig above the character
+      mineW = 5;
+      mineH = 5;
+      baseX = Math.floor(char.x + char.width / 2) - 2;
+      baseY = Math.floor(char.y) - mineH;
     } else {
       // Standing: dig in front — 4 wide × 8 tall
       mineW = 4;

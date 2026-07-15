@@ -16,6 +16,8 @@ export interface Character {
   airFrames: number;
   /** Whether the character is crouching. */
   crouching: boolean;
+  /** Whether the character is looking up. */
+  lookingUp: boolean;
 }
 
 const GRAVITY = 0.4;
@@ -61,6 +63,7 @@ export function createCharacter(grid: Grid): Character {
     swingStart: null,
     airFrames: 0,
     crouching: false,
+    lookingUp: false,
   };
 }
 
@@ -69,32 +72,36 @@ export interface CharacterInput {
   right: boolean;
   jump: boolean;
   crouch: boolean;
+  lookUp: boolean;
 }
 
-const keys: CharacterInput = { left: false, right: false, jump: false, crouch: false };
+const keys: CharacterInput = { left: false, right: false, jump: false, crouch: false, lookUp: false };
 let jumpHeld = false;
 
 export function attachCharacterInput(): void {
   window.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft" || e.key === "a") keys.left = true;
     if (e.key === "ArrowRight" || e.key === "d") keys.right = true;
-    if (e.key === "ArrowUp" || e.key === "w" || e.key === " ") keys.jump = true;
+    if (e.key === " ") keys.jump = true;
+    if (e.key === "ArrowUp" || e.key === "w") keys.lookUp = true;
     if (e.key === "ArrowDown" || e.key === "s") keys.crouch = true;
   });
   window.addEventListener("keyup", (e) => {
     if (e.key === "ArrowLeft" || e.key === "a") keys.left = false;
     if (e.key === "ArrowRight" || e.key === "d") keys.right = false;
-    if (e.key === "ArrowUp" || e.key === "w" || e.key === " ") {
+    if (e.key === " ") {
       keys.jump = false;
       jumpHeld = false;
     }
+    if (e.key === "ArrowUp" || e.key === "w") keys.lookUp = false;
     if (e.key === "ArrowDown" || e.key === "s") keys.crouch = false;
   });
 }
 
 export function updateCharacter(char: Character, grid: Grid): void {
-  // Crouch state
+  // Crouch / look up state
   char.crouching = keys.crouch;
+  char.lookingUp = keys.lookUp;
 
   // Horizontal movement
   let moveX = 0;
