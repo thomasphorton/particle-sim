@@ -44,6 +44,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
         const x = gx + dx;
         const y = gy + dy;
         if (!grid.inBounds(x, y)) continue;
+        if (!withinPlacementRange(x, y)) continue;
         if (material === MaterialId.Empty || grid.get(x, y) === MaterialId.Empty) {
           grid.set(x, y, material);
         }
@@ -80,6 +81,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
         const x = gx + dx;
         const y = gy + dy;
         if (!grid.inBounds(x, y)) continue;
+        if (!withinPlacementRange(x, y)) continue;
         grid.set(x, y, state.selectedMaterial);
         // Faucets start on low flow
         if (state.selectedMaterial === MaterialId.Faucet) {
