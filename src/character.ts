@@ -234,7 +234,24 @@ export function updateCharacter(char: Character, grid: Grid, dt: number): void {
 
   // Swimming: space to swim upward (repeatable, no jumpHeld gate)
   if (char.swimming && keys.jump) {
-    char.vy = SWIM_UP_VELOCITY;
+    // Check if near the surface (top row of character is not water)
+    const headY = Math.floor(char.y);
+    const x0 = Math.floor(char.x);
+    const x1 = Math.floor(char.x + char.width - 0.01);
+    let headInWater = false;
+    for (let gx = x0; gx <= x1; gx++) {
+      if (grid.inBounds(gx, headY) && grid.get(gx, headY) === MaterialId.Water) {
+        headInWater = true;
+        break;
+      }
+    }
+    if (!headInWater && !jumpHeld) {
+      // Near surface — do a full jump out of the water
+      char.vy = JUMP_VELOCITY;
+      jumpHeld = true;
+    } else {
+      char.vy = SWIM_UP_VELOCITY;
+    }
   } else {
     // Track air time for coyote time (in seconds)
     if (char.grounded) {
