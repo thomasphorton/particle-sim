@@ -118,6 +118,27 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
     return true;
   };
 
+  /** Mine (remove) cells and add to inventory. */
+  const mineAt = (gx: number, gy: number) => {
+    if (!withinPlacementRange(gx, gy)) return;
+    const r = state.brushSize;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > r * r) continue;
+        const x = gx + dx;
+        const y = gy + dy;
+        if (!grid.inBounds(x, y)) continue;
+        const id = grid.get(x, y) as MaterialId;
+        if (id === MaterialId.Empty) continue;
+        const mat = MATERIALS[id];
+        const name = mat.name.toLowerCase();
+        state.inventory[name] = (state.inventory[name] || 0) + 1;
+        grid.set(x, y, MaterialId.Empty);
+        grid.markUpdated(x, y);
+      }
+    }
+  };
+
   const start = (clientX: number, clientY: number) => {
     const pos = toGrid(clientX, clientY);
     // Clicking a faucet cycles its flow state
@@ -129,6 +150,12 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
       if (state.hoverPixel) {
         state.snip = { px: state.hoverPixel.x, py: state.hoverPixel.y, startTime: performance.now() };
       }
+      return;
+    }
+    if (state.toolMode === "pickaxe") {
+      painting = true;
+      mineAt(pos.x, pos.y);
+      lastGridPos = pos;
       return;
     }
     if (MATERIALS[state.selectedMaterial].placement.kind === "object") {
@@ -146,7 +173,11 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
     const pos = toGrid(clientX, clientY);
     state.hover = pos;
     if (!painting) return;
-    paintLine(lastGridPos, pos);
+    if (state.toolMode === "pickaxe") {
+      mineAt(pos.x, pos.y);
+    } else {
+      paintLine(lastGridPos, pos);
+    }
     lastGridPos = pos;
   };
 

@@ -1,8 +1,11 @@
 import { MaterialId } from "./materials";
 import type { Character } from "./character";
 
+export type ToolMode = "place" | "pickaxe";
+
 export interface Inventory {
   flowers: number;
+  [key: string]: number; // dynamic material inventory
 }
 
 export interface SnipAnimation {
@@ -24,6 +27,8 @@ export interface SimState {
   snip: SnipAnimation | null;
   /** The player character. */
   character: Character | null;
+  /** Current tool mode. */
+  toolMode: ToolMode;
 }
 
 export const state: SimState = {
@@ -35,4 +40,5 @@ export const state: SimState = {
   inventory: { flowers: 0 },
   snip: null,
   character: null,
+  toolMode: "place",
 };
