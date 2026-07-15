@@ -215,3 +215,14 @@ h1 {
 .hotbar-icon {
   pointer-events: none;
 }
+
+.hotbar-count {
+  position: absolute;
+  bottom: 2px;
+  right: 3px;
+  font-size: 10px;
+  color: #fff;
+  text-shadow: 0 0 2px #000, 0 0 4px #000;
+  pointer-events: none;
+  line-height: 1;
+}

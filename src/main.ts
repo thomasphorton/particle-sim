@@ -4,7 +4,7 @@ import { Renderer } from "./renderer";
 import { step } from "./simulation";
 import { attachInput } from "./input";
 import { buildUi } from "./ui";
-import { state } from "./state";
+import { state, getActiveHotbarMaterial } from "./state";
 import { MATERIALS, MaterialId } from "./materials";
 import { findFlowerCluster } from "./harvest";
 import { createCharacter, attachCharacterInput, updateCharacter, drawCharacter } from "./character";
@@ -163,8 +163,9 @@ function loop(): void {
   renderer.draw(grid);
   drawCharacter(renderer.getCtx(), character, CELL_SIZE);
 
-  // Draw placement radius border (only in place mode)
-  if (state.toolMode === "place") {
+  // Draw placement radius border (place mode, or play mode with material selected)
+  const showRadius = state.toolMode === "place" || (state.toolMode === "play" && getActiveHotbarMaterial() != null);
+  if (showRadius) {
     const ctx = renderer.getCtx();
     const charCx = (character.x + character.width / 2) * CELL_SIZE;
     const charCy = (character.y + character.height / 2) * CELL_SIZE;
@@ -226,8 +227,22 @@ function loop(): void {
   }
 
   const material = MATERIALS[state.selectedMaterial];
-  if (state.toolMode !== "pickaxe" && state.hover && !hoveringFaucet && !hoveredCluster && material.placement.kind === "object") {
+  if (state.toolMode !== "play" && state.hover && !hoveringFaucet && !hoveredCluster && material.placement.kind === "object") {
     renderer.drawObjectPreview(state.hover.x, state.hover.y, material.placement, material.color);
+  }
+
+  // Draw inventory placement preview in play mode
+  const hotbarMat = getActiveHotbarMaterial();
+  if (state.toolMode === "play" && state.hover && hotbarMat) {
+    const charCx = character.x + character.width / 2;
+    const charCy = character.y + character.height / 2;
+    renderer.drawInventoryPreview(
+      state.hover.x, state.hover.y,
+      hotbarMat.materialId,
+      charCx, charCy,
+      30, // PLACEMENT_RADIUS
+      state.brushSize,
+    );
   }
 
   requestAnimationFrame(loop);
