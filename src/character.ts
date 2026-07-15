@@ -207,7 +207,7 @@ export function drawCharacter(
     const headCx = px + cs * 1.5;
     const headCy = py + cs * 2; // pivot at neck
     ctx.translate(headCx, headCy);
-    ctx.rotate(-0.4); // tilt back ~23 degrees
+    ctx.rotate(-0.4 * char.facing); // tilt back relative to facing direction
     ctx.translate(-headCx, -headCy);
     ctx.fillStyle = hair;
     ctx.fillRect(px, py, cs * 3, cs);
