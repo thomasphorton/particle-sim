@@ -34,6 +34,20 @@ function loop(): void {
   renderer.draw(grid);
   drawCharacter(renderer.getCtx(), character, CELL_SIZE);
 
+  // Draw placement radius border
+  const ctx = renderer.getCtx();
+  const charCx = (character.x + character.width / 2) * CELL_SIZE;
+  const charCy = (character.y + character.height / 2) * CELL_SIZE;
+  const radius = 30 * CELL_SIZE;
+  ctx.save();
+  ctx.setLineDash([8, 6]);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(charCx, charCy, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
   // Highlight hovered flower/stem cluster
   let hoveredCluster: Set<number> | null = null;
   if (state.hover) {
