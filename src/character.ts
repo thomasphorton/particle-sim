@@ -82,15 +82,40 @@ export interface CharacterInput {
 const keys: CharacterInput = { left: false, right: false, jump: false, crouch: false, lookUp: false };
 let jumpHeld = false;
 
+function isEditable(target: EventTarget | null): boolean {
+  if (!target || !(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
+}
+
 export function attachCharacterInput(): void {
   window.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowLeft" || e.key === "a") keys.left = true;
-    if (e.key === "ArrowRight" || e.key === "d") keys.right = true;
-    if (e.key === " ") keys.jump = true;
-    if (e.key === "ArrowUp" || e.key === "w") keys.lookUp = true;
-    if (e.key === "ArrowDown" || e.key === "s") keys.crouch = true;
+    if (isEditable(e.target)) return;
+    let handled = false;
+    if (e.key === "ArrowLeft" || e.key === "a") {
+      keys.left = true;
+      handled = true;
+    }
+    if (e.key === "ArrowRight" || e.key === "d") {
+      keys.right = true;
+      handled = true;
+    }
+    if (e.key === " ") {
+      keys.jump = true;
+      handled = true;
+    }
+    if (e.key === "ArrowUp" || e.key === "w") {
+      keys.lookUp = true;
+      handled = true;
+    }
+    if (e.key === "ArrowDown" || e.key === "s") {
+      keys.crouch = true;
+      handled = true;
+    }
+    if (handled) e.preventDefault();
   });
   window.addEventListener("keyup", (e) => {
+    if (isEditable(e.target)) return;
     if (e.key === "ArrowLeft" || e.key === "a") keys.left = false;
     if (e.key === "ArrowRight" || e.key === "d") keys.right = false;
     if (e.key === " ") {
