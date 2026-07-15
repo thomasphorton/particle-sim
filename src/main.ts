@@ -15,6 +15,25 @@ const GRID_HEIGHT = 200;
 
 const grid = new Grid(GRID_WIDTH, GRID_HEIGHT);
 
+// Seed the world with a dirt mound in the center
+{
+  const cx = Math.floor(GRID_WIDTH / 2);
+  const baseY = GRID_HEIGHT - 1;
+  const moundWidth = 80;
+  const moundHeight = 40;
+  for (let dy = 0; dy < moundHeight; dy++) {
+    // Wider at bottom, narrower at top (roughly elliptical)
+    const rowHalfW = Math.floor(moundWidth / 2 * (1 - (dy / moundHeight) ** 2));
+    for (let dx = -rowHalfW; dx <= rowHalfW; dx++) {
+      const x = cx + dx;
+      const y = baseY - dy;
+      if (grid.inBounds(x, y)) {
+        grid.set(x, y, MaterialId.Dirt);
+      }
+    }
+  }
+}
+
 const uiRoot = document.querySelector<HTMLDivElement>("#ui-root")!;
 buildUi(uiRoot, grid);
 
