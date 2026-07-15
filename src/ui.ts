@@ -139,4 +139,64 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
 
   toolbar.append(materialGroup, brushGroup, toolGroup, actionGroup, inventoryGroup);
   root.appendChild(toolbar);
+
+  // --- Hotbar (below canvas) ---
+  const hotbar = document.createElement("div");
+  hotbar.className = "hotbar";
+
+  const SLOT_LABELS: Record<string, string> = {
+    pickaxe: "⛏️",
+    empty: "",
+  };
+
+  const slotElements: HTMLButtonElement[] = [];
+  for (let i = 0; i < 10; i++) {
+    const slot = document.createElement("button");
+    slot.className = "hotbar-slot";
+    const keyLabel = document.createElement("span");
+    keyLabel.className = "hotbar-key";
+    keyLabel.textContent = String((i + 1) % 10);
+    const icon = document.createElement("span");
+    icon.className = "hotbar-icon";
+    icon.textContent = SLOT_LABELS[state.hotbar[i].kind] ?? "";
+    slot.append(keyLabel, icon);
+    slot.addEventListener("click", () => selectSlot(i));
+    slotElements.push(slot);
+    hotbar.appendChild(slot);
+  }
+
+  function selectSlot(index: number): void {
+    state.activeSlot = index;
+    for (let j = 0; j < slotElements.length; j++) {
+      slotElements[j].classList.toggle("active", j === index);
+    }
+    // Auto-switch tool mode based on item
+    const item = state.hotbar[index];
+    if (item.kind === "pickaxe") {
+      setToolMode("pickaxe", pickaxeBtn);
+    }
+  }
+
+  // Initial selection
+  selectSlot(state.activeSlot);
+
+  // Number keys 1-0 select hotbar slots
+  window.addEventListener("keydown", (e) => {
+    const target = e.target as HTMLElement | null;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")) return;
+    const key = e.key;
+    if (key >= "1" && key <= "9") {
+      selectSlot(parseInt(key) - 1);
+      e.preventDefault();
+    } else if (key === "0") {
+      selectSlot(9);
+      e.preventDefault();
+    }
+  });
+
+  // Insert hotbar after canvas
+  const canvas = document.querySelector("#sim-canvas");
+  if (canvas && canvas.parentElement) {
+    canvas.parentElement.insertBefore(hotbar, canvas.nextSibling);
+  }
 }

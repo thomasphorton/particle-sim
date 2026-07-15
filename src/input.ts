@@ -1,7 +1,7 @@
 import { Grid } from "./grid";
 import { MATERIALS, MaterialId } from "./materials";
 import { harvestFlowerCluster } from "./harvest";
-import { state } from "./state";
+import { state, hasPickaxeEquipped } from "./state";
 import { startSwing } from "./character";
 
 /** Maximum placement distance from character center (in grid cells). */
@@ -182,7 +182,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
       }
       return;
     }
-    if (state.toolMode === "pickaxe") {
+    if (state.toolMode === "pickaxe" && hasPickaxeEquipped()) {
       mineInFront();
       if (state.character) startSwing(state.character);
       painting = false;
