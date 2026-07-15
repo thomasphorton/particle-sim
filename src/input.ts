@@ -129,7 +129,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
     const baseX = char.facing === 1
       ? Math.floor(char.x + char.width)
       : Math.floor(char.x) - mineW;
-    const baseY = Math.floor(char.y) - 1;
+    const baseY = Math.floor(char.y) - 3;
 
     for (let dy = 0; dy < mineH; dy++) {
       for (let dx = 0; dx < mineW; dx++) {
