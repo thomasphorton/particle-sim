@@ -136,6 +136,50 @@ export function attachCharacterInput(): void {
   });
 }
 
+/** When the character bumps its head, check for faucet cells above and cycle their state. */
+function checkFaucetBump(grid: Grid, char: Character): void {
+  const headY = Math.floor(char.y) - 1; // row just above head
+  if (headY < 0) return;
+  const x0 = Math.floor(char.x);
+  const x1 = Math.floor(char.x + char.width - 0.01);
+  let hitFaucet = false;
+  for (let gx = x0; gx <= x1; gx++) {
+    if (grid.inBounds(gx, headY) && grid.get(gx, headY) === MaterialId.Faucet) {
+      hitFaucet = true;
+      break;
+    }
+  }
+  if (!hitFaucet) return;
+  // Cycle all connected faucet cells: 0→1→2→0
+  const visited = new Set<number>();
+  const queue: [number, number][] = [];
+  // Start flood-fill from the hit cells
+  for (let gx = x0; gx <= x1; gx++) {
+    if (grid.inBounds(gx, headY) && grid.get(gx, headY) === MaterialId.Faucet) {
+      queue.push([gx, headY]);
+    }
+  }
+  while (queue.length > 0) {
+    const [fx, fy] = queue.pop()!;
+    const idx = fy * grid.width + fx;
+    if (visited.has(idx)) continue;
+    visited.add(idx);
+    // Check neighbors
+    for (const [nx, ny] of [[fx-1,fy],[fx+1,fy],[fx,fy-1],[fx,fy+1]]) {
+      if (grid.inBounds(nx, ny) && grid.get(nx, ny) === MaterialId.Faucet && !visited.has(ny * grid.width + nx)) {
+        queue.push([nx, ny]);
+      }
+    }
+  }
+  // Get current state from any cell and cycle
+  const firstIdx = visited.values().next().value!;
+  const currentState = grid.vx[firstIdx];
+  const newState = (currentState + 1) % 3;
+  for (const idx of visited) {
+    grid.vx[idx] = newState;
+  }
+}
+
 /** Check how many cells in the character's hitbox are water. */
 function waterCellCount(grid: Grid, char: Character): number {
   let count = 0;
@@ -229,6 +273,8 @@ export function updateCharacter(char: Character, grid: Grid, dt: number): void {
       char.grounded = true;
     } else {
       // Hitting ceiling — snap below the ceiling
+      // Check if we hit a faucet — cycle its flow state
+      checkFaucetBump(grid, char);
       char.y = Math.ceil(newY);
       while (collidesAt(grid, char.x, char.y, char.width, char.height) && char.y < grid.height - char.height) {
         char.y += 1;
