@@ -39,11 +39,12 @@ function loop(): void {
   const charCx = (character.x + character.width / 2) * CELL_SIZE;
   const charCy = (character.y + character.height / 2) * CELL_SIZE;
   const t = performance.now() / 1000;
-  const radius = 30 * CELL_SIZE + Math.sin(t * 1.5) * 3;
+  const radius = 30 * CELL_SIZE;
+  const alpha = 0.2 + Math.sin(t * 1.5) * 0.1;
   ctx.save();
   ctx.setLineDash([8, 6]);
   ctx.lineDashOffset = -t * 20;
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.arc(charCx, charCy, radius, 0, Math.PI * 2);
