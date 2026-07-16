@@ -8,6 +8,7 @@ import { state, getActiveHotbarMaterial } from "./state";
 import { MATERIALS, MaterialId } from "./materials";
 import { findFlowerCluster } from "./harvest";
 import { createCharacter, attachCharacterInput, updateCharacter, drawCharacter } from "./character";
+import { updateFallingObjects } from "./falling";
 
 const CELL_SIZE = 5;
 const GRID_WIDTH = 320;
@@ -160,6 +161,7 @@ function loop(): void {
     state.dayNightCycle += dt / 300;
     step(grid);
     updateCharacter(character, grid, dt);
+    updateFallingObjects(grid, dt);
   }
   renderer.draw(grid);
   drawCharacter(renderer.getCtx(), character, CELL_SIZE);

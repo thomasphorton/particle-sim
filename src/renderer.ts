@@ -254,6 +254,9 @@ export class Renderer {
     }
 
     this.drawTorchLights(grid);
+    this.drawTorchHandles(grid);
+    this.drawTorchFlames(grid);
+    this.drawFallingObjects();
     this.drawClockFaces(grid);
     this.drawObjectOutlines(grid);
     this.drawFaucetDials(grid);
@@ -268,32 +271,147 @@ export class Renderer {
     return (1 - Math.cos(2 * Math.PI * (phase - 0.25))) / 2;
   }
 
+  /**
+   * Draw a wooden handle hanging a few blocks below each torch. Anchored at the
+   * bottom-center of each torch cluster (a cell with torches left & right but not
+   * below), so a 3×3 torch gets exactly one handle.
+   */
+  private drawTorchHandles(grid: Grid): void {
+    const cs = this.cellSize;
+    const isTorch = (x: number, y: number) =>
+      grid.inBounds(x, y) && grid.get(x, y) === MaterialId.Torch;
+
+    this.ctx.save();
+    for (let y = 0; y < grid.height; y++) {
+      for (let x = 0; x < grid.width; x++) {
+        if (!isTorch(x, y)) continue;
+        // Only the bottom-center cell of a torch cluster anchors the handle.
+        if (!isTorch(x - 1, y) || !isTorch(x + 1, y) || isTorch(x, y + 1)) continue;
+        this.drawTorchHandleAt(x * cs + cs / 2, y * cs + cs * 0.5);
+      }
+    }
+    this.ctx.restore();
+  }
+
+  /** Handle body at a pixel anchor (center x, top y). */
+  private drawTorchHandleAt(cx: number, topY: number): void {
+    const cs = this.cellSize;
+    const w = cs * 0.9;
+    const len = cs * 3.5; // a few blocks below
+    this.ctx.fillStyle = "#5a3a1a";
+    this.ctx.fillRect(cx - w / 2, topY, w, len);
+    this.ctx.fillStyle = "#7a5223";
+    this.ctx.fillRect(cx - w / 2, topY, Math.max(1, w * 0.3), len);
+  }
+
+  /**
+   * Draw a defined layered flame on top of the glow, anchored at the top-center
+   * of each torch cluster (torches left & right but none above).
+   */
+  private drawTorchFlames(grid: Grid): void {
+    const cs = this.cellSize;
+    const isTorch = (x: number, y: number) =>
+      grid.inBounds(x, y) && grid.get(x, y) === MaterialId.Torch;
+
+    this.ctx.save();
+    for (let y = 0; y < grid.height; y++) {
+      for (let x = 0; x < grid.width; x++) {
+        if (!isTorch(x, y)) continue;
+        // Only the top-center cell of a torch cluster anchors the flame.
+        if (!isTorch(x - 1, y) || !isTorch(x + 1, y) || isTorch(x, y - 1)) continue;
+        this.drawTorchFlameAt(x * cs + cs / 2, y * cs + cs * 0.6);
+      }
+    }
+    this.ctx.restore();
+  }
+
+  /** Layered flame at a pixel center. */
+  private drawTorchFlameAt(cx: number, cy: number): void {
+    const cs = this.cellSize;
+    const TWO_PI = Math.PI * 2;
+    // Outer flame (deep orange)
+    this.ctx.fillStyle = "#d1531a";
+    this.ctx.beginPath();
+    this.ctx.ellipse(cx, cy, cs * 0.95, cs * 1.5, 0, 0, TWO_PI);
+    this.ctx.fill();
+    // Mid flame (bright orange)
+    this.ctx.fillStyle = "#ff9a2e";
+    this.ctx.beginPath();
+    this.ctx.ellipse(cx, cy + cs * 0.25, cs * 0.6, cs * 1.05, 0, 0, TWO_PI);
+    this.ctx.fill();
+    // Inner core (yellow-white)
+    this.ctx.fillStyle = "#ffe9a8";
+    this.ctx.beginPath();
+    this.ctx.ellipse(cx, cy + cs * 0.4, cs * 0.32, cs * 0.62, 0, 0, TWO_PI);
+    this.ctx.fill();
+  }
+
   private drawTorchLights(grid: Grid): void {
+    const cs = this.cellSize;
+    const isTorch = (x: number, y: number) =>
+      grid.inBounds(x, y) && grid.get(x, y) === MaterialId.Torch;
+    this.ctx.save();
+    this.ctx.globalCompositeOperation = "screen";
+    for (let y = 0; y < grid.height; y++) {
+      for (let x = 0; x < grid.width; x++) {
+        if (!isTorch(x, y)) continue;
+        // Emit one glow per torch, centered on the flame (top-center cell).
+        if (!isTorch(x - 1, y) || !isTorch(x + 1, y) || isTorch(x, y - 1)) continue;
+        this.drawTorchGlowAt(x * cs + cs / 2, y * cs + cs * 0.6);
+      }
+    }
+    this.ctx.restore();
+  }
+
+  /** Radial glow centered on a flame pixel position (caller sets screen blend). */
+  private drawTorchGlowAt(px: number, py: number): void {
     const cs = this.cellSize;
     const nightStrength = this.nightStrength();
     const glowStrength = 0.25 + nightStrength * 0.75;
-    this.ctx.save();
-    this.ctx.globalCompositeOperation = "screen";
+    // Intensity boost (increase by 200% → ~3× the glow opacity), clamped to 1.
+    const boost = 3;
+    const a = (v: number) => Math.min(1, v * boost);
+    const radius = cs * (12 + nightStrength * 4);
+    const gradient = this.ctx.createRadialGradient(px, py, cs * 1.2, px, py, radius);
+    gradient.addColorStop(0, `rgba(255, 240, 180, ${a(0.18 + glowStrength * 0.5)})`);
+    gradient.addColorStop(0.25, `rgba(255, 190, 90, ${a(0.1 + glowStrength * 0.32)})`);
+    gradient.addColorStop(0.6, `rgba(255, 140, 40, ${a(0.04 + glowStrength * 0.16)})`);
+    gradient.addColorStop(1, "rgba(255, 120, 30, 0)");
+    this.ctx.fillStyle = gradient;
+    this.ctx.beginPath();
+    this.ctx.arc(px, py, radius, 0, Math.PI * 2);
+    this.ctx.fill();
+  }
 
-    for (let y = 0; y < grid.height; y++) {
-      for (let x = 0; x < grid.width; x++) {
-        if (grid.get(x, y) !== MaterialId.Torch) continue;
-        const px = x * cs + cs / 2;
-        const py = y * cs + cs / 2;
-        const gradient = this.ctx.createRadialGradient(px, py, cs * 1.2, px, py, cs * (12 + nightStrength * 4));
-        gradient.addColorStop(0, `rgba(255, 240, 180, ${0.18 + glowStrength * 0.5})`);
-        gradient.addColorStop(0.25, `rgba(255, 190, 90, ${0.1 + glowStrength * 0.32})`);
-        gradient.addColorStop(0.6, `rgba(255, 140, 40, ${0.04 + glowStrength * 0.16})`);
-        gradient.addColorStop(1, "rgba(255, 120, 30, 0)");
-        this.ctx.fillStyle = gradient;
-        this.ctx.beginPath();
-        this.ctx.arc(px, py, cs * (12 + nightStrength * 4), 0, Math.PI * 2);
-        this.ctx.fill();
+  /**
+   * Draw objects that are mid-fall (not yet in the grid) at their animated
+   * position. Torches also get their glow/handle/flame overlays so they look
+   * identical to placed torches during the fall.
+   */
+  private drawFallingObjects(): void {
+    const cs = this.cellSize;
+    for (const o of state.fallingObjects) {
+      // Base footprint block, drawn using the material color.
+      const [r, g, b] = MATERIALS[o.materialId].color;
+      this.ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+      for (const [dx, dy] of o.offsets) {
+        this.ctx.fillRect((o.x + dx) * cs, (o.y + dy) * cs, cs, cs);
+      }
+
+      if (o.materialId === MaterialId.Torch) {
+        const flameCx = o.x * cs + cs / 2;
+        const flameCy = (o.y - 1) * cs + cs * 0.6; // top-center cell
+        // Glow (screen blend), then handle and flame on top.
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = "screen";
+        this.drawTorchGlowAt(flameCx, flameCy);
+        this.ctx.restore();
+        this.drawTorchHandleAt(o.x * cs + cs / 2, (o.y + 1) * cs + cs * 0.5);
+        this.drawTorchFlameAt(flameCx, flameCy);
       }
     }
-
-    this.ctx.restore();
   }
+
 
   private drawClockFaces(grid: Grid): void {
     const cs = this.cellSize;
@@ -421,8 +539,9 @@ export class Renderer {
       for (let x = 0; x < grid.width; x++) {
         const id = ids[rowOffset + x] as MaterialId;
         if (MATERIALS[id].placement.kind !== "object") continue;
-        // Skip stone and wood — they use bottom-edge shading instead
-        if (id === MaterialId.Stone || id === MaterialId.Wood) continue;
+        // Skip stone and wood — they use bottom-edge shading instead.
+        // Skip torch — it has its own flame/glow/handle rendering.
+        if (id === MaterialId.Stone || id === MaterialId.Wood || id === MaterialId.Torch) continue;
 
         const left = x * cs;
         const top = y * cs;
