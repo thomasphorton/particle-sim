@@ -28,8 +28,6 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
 
   const brushGroup = document.createElement("div");
   brushGroup.className = "brush-group";
-  const brushLabel = document.createElement("label");
-  brushLabel.textContent = "Brush";
   const brushInput = document.createElement("input");
   brushInput.type = "range";
   brushInput.min = "1";
@@ -38,7 +36,7 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
   brushInput.addEventListener("input", () => {
     state.brushSize = Number(brushInput.value);
   });
-  brushGroup.append(brushLabel, brushInput);
+  brushGroup.append(brushInput);
 
   const updateBrushAvailability = () => {
     const isObject = MATERIALS[state.selectedMaterial].placement.kind === "object";
@@ -84,37 +82,7 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
 
   actionGroup.append(pauseBtn, clearBtn);
 
-  // Tool mode toggle
-  const toolGroup = document.createElement("div");
-  toolGroup.className = "tool-group";
-  const editorBtn = document.createElement("button");
-  editorBtn.textContent = "🗺️ Edit";
-  const placeBtn = document.createElement("button");
-  placeBtn.textContent = "🖌️ Place";
-  const pickaxeBtn = document.createElement("button");
-  pickaxeBtn.textContent = "🎮 Play";
-
-  const toolBtns = [editorBtn, pickaxeBtn];
-  const setToolMode = (mode: typeof state.toolMode, active: HTMLButtonElement) => {
-    state.toolMode = mode;
-    for (const btn of toolBtns) btn.classList.toggle("active", btn === active);
-    const showPalette = mode === "editor";
-    materialGroup.style.display = showPalette ? "" : "none";
-    brushGroup.style.display = showPalette ? "" : "none";
-    if (!showPalette) {
-      // Deselect material buttons
-      for (const [, btn] of buttons) btn.classList.remove("active");
-    } else {
-      // Re-select current material
-      buttons.get(state.selectedMaterial)?.classList.add("active");
-    }
-  };
-  editorBtn.addEventListener("click", () => setToolMode("editor", editorBtn));
-  pickaxeBtn.addEventListener("click", () => setToolMode("play", pickaxeBtn));
-  // Apply initial mode visibility and button states
-  setToolMode(state.toolMode, pickaxeBtn);
-  toolGroup.append(editorBtn, pickaxeBtn);
-
+  // Time-of-day presets (edit mode only)
   const timeGroup = document.createElement("div");
   timeGroup.className = "time-group";
   const timePresets = [
@@ -123,12 +91,60 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
     { label: "Dusk", preset: "dusk" as const },
     { label: "Night", preset: "night" as const },
   ];
+  const timeButtons: HTMLButtonElement[] = [];
   for (const { label, preset } of timePresets) {
     const btn = document.createElement("button");
     btn.textContent = label;
-    btn.addEventListener("click", () => setDayNightPreset(preset));
+    btn.addEventListener("click", () => {
+      setDayNightPreset(preset);
+      for (const b of timeButtons) b.classList.toggle("active", b === btn);
+    });
+    timeButtons.push(btn);
     timeGroup.appendChild(btn);
   }
+
+  // Edit panel: material palette, brush size, and time presets.
+  // Only visible in Edit mode.
+  const makeSection = (title: string, body: HTMLElement): HTMLDivElement => {
+    const section = document.createElement("div");
+    section.className = "edit-section";
+    const heading = document.createElement("span");
+    heading.className = "edit-section-title";
+    heading.textContent = title;
+    section.append(heading, body);
+    return section;
+  };
+  const editPanel = document.createElement("div");
+  editPanel.className = "edit-panel";
+  editPanel.append(
+    makeSection("Materials", materialGroup),
+    makeSection("Brush", brushGroup),
+    makeSection("Time of day", timeGroup),
+  );
+
+  // Tool mode toggle
+  const toolGroup = document.createElement("div");
+  toolGroup.className = "tool-group";
+  const editorBtn = document.createElement("button");
+  editorBtn.textContent = "🗺️ Edit";
+  const pickaxeBtn = document.createElement("button");
+  pickaxeBtn.textContent = "🎮 Play";
+
+  const toolBtns = [editorBtn, pickaxeBtn];
+  const setToolMode = (mode: typeof state.toolMode, active: HTMLButtonElement) => {
+    state.toolMode = mode;
+    for (const btn of toolBtns) btn.classList.toggle("active", btn === active);
+    const showPalette = mode === "editor";
+    editPanel.style.display = showPalette ? "" : "none";
+    if (showPalette) {
+      buttons.get(state.selectedMaterial)?.classList.add("active");
+    } else {
+      for (const [, btn] of buttons) btn.classList.remove("active");
+    }
+  };
+  editorBtn.addEventListener("click", () => setToolMode("editor", editorBtn));
+  pickaxeBtn.addEventListener("click", () => setToolMode("play", pickaxeBtn));
+  toolGroup.append(editorBtn, pickaxeBtn);
 
   // Flower counter
   const flowerCounter = document.createElement("span");
@@ -140,8 +156,11 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
   };
   requestAnimationFrame(updateFlowerCounter);
 
-  toolbar.append(materialGroup, brushGroup, toolGroup, timeGroup, actionGroup, flowerCounter);
-  root.appendChild(toolbar);
+  toolbar.append(toolGroup, actionGroup, flowerCounter);
+  root.append(toolbar, editPanel);
+
+  // Apply initial mode visibility and button states
+  setToolMode(state.toolMode, pickaxeBtn);
 
   // --- Hotbar (below canvas) ---
   const hotbar = document.createElement("div");

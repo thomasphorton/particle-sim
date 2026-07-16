@@ -1,5 +1,14 @@
 import { Grid } from "./grid";
 import { MATERIALS, MaterialId, MaterialPhase } from "./materials";
+import { state, addToHotbar, hasPickaxeEquipped } from "./state";
+
+// Pickaxe swing animation + mining arc (shared by update/mining and draw)
+const SWING_DURATION = 250; // ms
+const SWING_START_ANGLE = -Math.PI * 0.6; // raised, up-and-back
+const SWING_END_ANGLE = Math.PI * 0.2;    // forward-and-down
+function swingAngle(progress: number): number {
+  return SWING_START_ANGLE + (SWING_END_ANGLE - SWING_START_ANGLE) * progress;
+}
 
 export interface Character {
   x: number; // grid position (float for smooth movement)
@@ -12,6 +21,10 @@ export interface Character {
   facing: -1 | 1;
   /** Pickaxe swing animation start time, null if not swinging. */
   swingStart: number | null;
+  /** Swing progress (0..1) already processed for mining, to sweep the arc across frames. */
+  swingMinedProgress: number;
+  /** Whether the mine button is held, to auto-repeat swings. */
+  swingHeld: boolean;
   /** Seconds since last grounded (for coyote time). */
   airTime: number;
   /** Whether the character is crouching. */
@@ -42,6 +55,7 @@ function isSolid(grid: Grid, gx: number, gy: number): boolean {
   if (!grid.inBounds(gx, gy)) return true; // treat OOB as solid (floor/walls)
   const id = grid.get(gx, gy) as MaterialId;
   if (id === MaterialId.Empty) return false;
+  if (id === MaterialId.Torch) return false; // torches are walk-through decorations
   const mat = MATERIALS[id];
   // Solid phase or powder (sand) counts as ground
   return mat.phase === MaterialPhase.Solid || mat.phase === MaterialPhase.Powder;
@@ -73,6 +87,8 @@ export function createCharacter(grid: Grid): Character {
     grounded: false,
     facing: 1,
     swingStart: null,
+    swingMinedProgress: 0,
+    swingHeld: false,
     airTime: 0,
     crouching: false,
     lookingUp: false,
@@ -269,8 +285,9 @@ export function updateCharacter(char: Character, grid: Grid, dt: number): void {
   const newX = char.x + moveX;
   if (!collidesAt(grid, newX, char.y, char.width, char.height)) {
     char.x = newX;
-  } else {
-    // Try to step up 1-2 cells (slope/stair climbing)
+  } else if (char.swingStart === null) {
+    // Try to step up 1-2 cells (slope/stair climbing).
+    // Disabled while swinging so you mine into ledges instead of climbing them.
     for (let stepUp = 1; stepUp <= 2; stepUp++) {
       if (!collidesAt(grid, newX, char.y - stepUp, char.width, char.height)) {
         char.x = newX;
@@ -315,6 +332,118 @@ export function updateCharacter(char: Character, grid: Grid, dt: number): void {
     char.y = grid.height - char.height;
     char.vy = 0;
     char.grounded = true;
+  }
+
+  // Pickaxe arc mining: sweep the head through the animation, following the
+  // character's live position so blocks hit while jumping/falling are included.
+  mineSwingArc(char, grid);
+
+  // Swing lifecycle. While the mine button is held, keep swinging continuously —
+  // this is independent of movement, jumping, or head tilt, so those never
+  // interrupt a held swing. updateCharacter fully owns swingStart (draw only reads it).
+  const swinging = char.swingStart !== null;
+  const swingDone = swinging && performance.now() - char.swingStart! >= SWING_DURATION;
+  if (char.swingHeld && state.toolMode === "play" && hasPickaxeEquipped()) {
+    if (!swinging || swingDone) {
+      char.swingStart = performance.now();
+      char.swingMinedProgress = 0;
+    }
+  } else if (swingDone) {
+    char.swingStart = null;
+  }
+}
+
+/** Mine a single grid cell, handling object flood-fill, inventory and hotbar. */
+function mineCellAt(grid: Grid, x: number, y: number, mined: Set<number>): void {
+  if (!grid.inBounds(x, y)) return;
+  const key = y * grid.width + x;
+  if (mined.has(key)) return;
+  const id = grid.get(x, y) as MaterialId;
+  if (id === MaterialId.Empty || id === MaterialId.Water) return;
+  const mat = MATERIALS[id];
+
+  // Object-type materials: flood-fill to remove the whole object as one item
+  if (mat.placement.kind === "object") {
+    const queue: [number, number][] = [[x, y]];
+    mined.add(key);
+    while (queue.length > 0) {
+      const [cx, cy] = queue.shift()!;
+      grid.set(cx, cy, MaterialId.Empty);
+      grid.markUpdated(cx, cy);
+      for (const [nx, ny] of [[cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]] as const) {
+        if (!grid.inBounds(nx, ny)) continue;
+        const k = ny * grid.width + nx;
+        if (mined.has(k)) continue;
+        if (grid.get(nx, ny) === id) {
+          mined.add(k);
+          queue.push([nx, ny]);
+        }
+      }
+    }
+    addToHotbar(id);
+    const name = mat.name.toLowerCase();
+    state.inventory[name] = (state.inventory[name] || 0) + 1;
+    return;
+  }
+
+  mined.add(key);
+  const name = mat.name.toLowerCase();
+  state.inventory[name] = (state.inventory[name] || 0) + 1;
+  // Add minable materials to hotbar (skip non-placeable things like stems/flowers/grass)
+  if (id !== MaterialId.Stem && id !== MaterialId.Flower && id !== MaterialId.Grass) {
+    addToHotbar(id);
+  }
+  grid.set(x, y, MaterialId.Empty);
+  grid.markUpdated(x, y);
+}
+
+/** Grid cells covered by the pickaxe head for a given swing angle. */
+function pickaxeHeadCells(char: Character, angle: number, out: Map<string, [number, number]>): void {
+  // Pivot at the shoulder (matches drawCharacter). Values in grid cells.
+  // Shift the arc vertically to follow the head tilt: aim higher when looking
+  // up, lower when crouching.
+  const tiltOffset = char.lookingUp ? -4 : char.crouching ? 3 : 0;
+  const sx = char.x + (char.facing === 1 ? char.width : 0);
+  const sy = char.y + 2.5 + tiltOffset;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  // For the normal (untilted) swing, don't mine below the character's feet so
+  // you can mine straight left/right without digging out the floor you stand on.
+  const floorLimit = (!char.lookingUp && !char.crouching)
+    ? Math.floor(char.y + char.height)
+    : Infinity;
+  // Sample along the handle/head length and across the head's height (spikes).
+  // Start near the shoulder (lx ~0.5) so the cells right in front of the player
+  // are cleared too — otherwise you can't advance into what you're mining.
+  for (let lx = 0.5; lx <= 4.5; lx += 0.5) {
+    for (let ly = -0.8; ly <= 0.8; ly += 0.8) {
+      const wx = Math.floor(sx + char.facing * (lx * cos - ly * sin));
+      const wy = Math.floor(sy + (lx * sin + ly * cos));
+      if (wy >= floorLimit) continue;
+      out.set(`${wx},${wy}`, [wx, wy]);
+    }
+  }
+}
+
+/** Mine all cells the pickaxe head sweeps through since the last processed frame. */
+function mineSwingArc(char: Character, grid: Grid): void {
+  if (char.swingStart === null) return;
+  const elapsed = performance.now() - char.swingStart;
+  const progress = Math.min(elapsed / SWING_DURATION, 1);
+
+  // Collect the swept cells between the last processed progress and now, sampling
+  // finely so no cell is skipped even at low frame rates.
+  const swept = new Map<string, [number, number]>();
+  const from = char.swingMinedProgress;
+  const STEP = 0.04;
+  for (let p = from; p <= progress + 1e-6; p += STEP) {
+    pickaxeHeadCells(char, swingAngle(Math.min(p, 1)), swept);
+  }
+  char.swingMinedProgress = progress;
+
+  const mined = new Set<number>();
+  for (const [gx, gy] of swept.values()) {
+    mineCellAt(grid, gx, gy, mined);
   }
 }
 
@@ -386,44 +515,43 @@ export function drawCharacter(
   ctx.fillRect(px, py + cs * 4, cs, cs);
   ctx.fillRect(px + cs * 2, py + cs * 4, cs, cs);
 
-  // Pickaxe swing animation
+  // Pickaxe swing animation (read-only; updateCharacter owns the swing lifecycle)
   if (char.swingStart !== null) {
-    const SWING_DURATION = 250;
     const elapsed = performance.now() - char.swingStart;
-    if (elapsed >= SWING_DURATION) {
-      char.swingStart = null;
-    } else {
-      const progress = elapsed / SWING_DURATION;
-      // Swing arc: starts raised, swings down
-      const startAngle = -Math.PI * 0.6;
-      const endAngle = Math.PI * 0.2;
-      const angle = startAngle + (endAngle - startAngle) * progress;
+    const progress = Math.min(elapsed / SWING_DURATION, 1);
+    // Swing arc: starts raised, swings down
+    const angle = swingAngle(progress);
 
-      ctx.save();
-      // Pivot at shoulder
-      const shoulderX = px + (char.facing === 1 ? cs * 3 : 0);
-      const shoulderY = py + cs * 2.5;
-      ctx.translate(shoulderX, shoulderY);
-      ctx.scale(char.facing, 1);
-      ctx.rotate(angle);
+    ctx.save();
+    // Pivot at shoulder
+    const shoulderX = px + (char.facing === 1 ? cs * 3 : 0);
+    const shoulderY = py + cs * 2.5;
+    ctx.translate(shoulderX, shoulderY);
+    ctx.scale(char.facing, 1);
+    ctx.rotate(angle);
 
-      // Handle
-      ctx.fillStyle = "#8B6914";
-      ctx.fillRect(0, -cs * 0.4, cs * 4, cs * 0.8);
+    // Handle
+    ctx.fillStyle = "#8B6914";
+    ctx.fillRect(0, -cs * 0.4, cs * 4, cs * 0.8);
 
-      // Pickaxe head
-      ctx.fillStyle = "#666";
-      ctx.fillRect(cs * 3.2, -cs * 1.2, cs * 1.2, cs * 0.8); // top spike
-      ctx.fillRect(cs * 3.2, cs * 0.4, cs * 1.2, cs * 0.8);  // bottom spike
-      ctx.fillStyle = "#888";
-      ctx.fillRect(cs * 3, -cs * 0.6, cs * 0.8, cs * 1.2);   // head center
+    // Pickaxe head
+    ctx.fillStyle = "#666";
+    ctx.fillRect(cs * 3.2, -cs * 1.2, cs * 1.2, cs * 0.8); // top spike
+    ctx.fillRect(cs * 3.2, cs * 0.4, cs * 1.2, cs * 0.8);  // bottom spike
+    ctx.fillStyle = "#888";
+    ctx.fillRect(cs * 3, -cs * 0.6, cs * 0.8, cs * 1.2);   // head center
 
-      ctx.restore();
-    }
+    ctx.restore();
   }
 }
 
 /** Trigger a pickaxe swing animation. */
 export function startSwing(char: Character): void {
   char.swingStart = performance.now();
+  char.swingMinedProgress = 0;
+}
+
+/** Set whether the mine button is held (enables auto-repeat swings). */
+export function setSwingHeld(char: Character, held: boolean): void {
+  char.swingHeld = held;
 }

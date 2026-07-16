@@ -43,6 +43,18 @@ export interface SimState {
   toolMode: ToolMode;
   /** Progress through the day/night cycle from 0 to 1. */
   dayNightCycle: number;
+  /** Objects currently animating a fall from placement to the ground. */
+  fallingObjects: FallingObject[];
+}
+
+/** An object mid-fall: material, center cell x, animated center y (float), rest target, velocity, footprint. */
+export interface FallingObject {
+  materialId: MaterialId;
+  x: number;
+  y: number;
+  restY: number;
+  vy: number;
+  offsets: [number, number][];
 }
 
 export const state: SimState = {
@@ -70,6 +82,7 @@ export const state: SimState = {
   character: null,
   toolMode: "play",
   dayNightCycle: 0.5,
+  fallingObjects: [],
 };
 
 export function setDayNightPreset(preset: DayNightPreset): void {

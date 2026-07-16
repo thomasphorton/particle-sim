@@ -115,6 +115,68 @@ h1 {
   gap: 4px;
 }
 
+/* Edit panel — grouped, labeled controls shown only in Edit mode */
+.edit-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: stretch;
+  justify-content: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.edit-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 12px;
+  border-right: 1px solid var(--border);
+}
+
+.edit-section:last-child {
+  border-right: none;
+}
+
+.edit-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.time-group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.time-group button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #262832;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+
+.time-group button:hover {
+  border-color: var(--accent);
+}
+
+.time-group button.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
 .tool-group button {
   padding: 6px 14px;
   border-radius: 6px;

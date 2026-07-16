@@ -2,7 +2,7 @@ import { Grid } from "./grid";
 import { MATERIALS, MaterialId } from "./materials";
 import { harvestFlowerCluster } from "./harvest";
 import { state, hasPickaxeEquipped, addToHotbar, getActiveHotbarMaterial, removeFromActiveSlot } from "./state";
-import { startSwing } from "./character";
+import { startSwing, setSwingHeld } from "./character";
 
 /** Maximum placement distance from character center (in grid cells). */
 const PLACEMENT_RADIUS = 30;
@@ -132,86 +132,6 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
     return true;
   };
 
-  /** Mine a small area in front of the character, matching the pickaxe arc. */
-  const mineInFront = () => {
-    const char = state.character;
-    if (!char) return;
-
-    let mineW: number, mineH: number, baseX: number, baseY: number;
-
-    if (char.crouching) {
-      mineW = 5;
-      mineH = 5;
-      baseX = char.facing === 1
-        ? Math.floor(char.x + char.width) - 1
-        : Math.floor(char.x) - mineW + 1;
-      baseY = Math.floor(char.y + char.height);
-    } else if (char.lookingUp) {
-      mineW = 5;
-      mineH = 5;
-      baseX = Math.floor(char.x + char.width / 2) - 2;
-      baseY = Math.floor(char.y) - mineH;
-    } else {
-      mineW = 4;
-      mineH = char.height + 3;
-      baseX = char.facing === 1
-        ? Math.floor(char.x + char.width)
-        : Math.floor(char.x) - mineW;
-      baseY = Math.floor(char.y) - 3;
-    }
-
-    // Track which cells have already been mined (to avoid double-counting flood-filled objects)
-    const mined = new Set<number>();
-    const cellKey = (x: number, y: number) => y * grid.width + x;
-
-    for (let dy = 0; dy < mineH; dy++) {
-      for (let dx = 0; dx < mineW; dx++) {
-        const x = baseX + dx;
-        const y = baseY + dy;
-        if (!grid.inBounds(x, y)) continue;
-        if (mined.has(cellKey(x, y))) continue;
-        const id = grid.get(x, y) as MaterialId;
-        if (id === MaterialId.Empty || id === MaterialId.Water) continue;
-        const mat = MATERIALS[id];
-
-        // Object-type materials: flood-fill to remove the whole object as one item
-        if (mat.placement.kind === "object") {
-          const queue: [number, number][] = [[x, y]];
-          mined.add(cellKey(x, y));
-          while (queue.length > 0) {
-            const [cx, cy] = queue.shift()!;
-            grid.set(cx, cy, MaterialId.Empty);
-            grid.markUpdated(cx, cy);
-            for (const [nx, ny] of [[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]] as const) {
-              if (!grid.inBounds(nx, ny)) continue;
-              const k = cellKey(nx, ny);
-              if (mined.has(k)) continue;
-              if (grid.get(nx, ny) === id) {
-                mined.add(k);
-                queue.push([nx, ny]);
-              }
-            }
-          }
-          // One item per whole object
-          addToHotbar(id);
-          const name = mat.name.toLowerCase();
-          state.inventory[name] = (state.inventory[name] || 0) + 1;
-          continue;
-        }
-
-        mined.add(cellKey(x, y));
-        const name = mat.name.toLowerCase();
-        state.inventory[name] = (state.inventory[name] || 0) + 1;
-        // Add minable materials to hotbar (skip non-placeable things like stems/flowers/grass)
-        if (id !== MaterialId.Stem && id !== MaterialId.Flower && id !== MaterialId.Grass) {
-          addToHotbar(id);
-        }
-        grid.set(x, y, MaterialId.Empty);
-        grid.markUpdated(x, y);
-      }
-    }
-  };
-
   /** Place a single cell from the active hotbar material slot. */
   const placeFromHotbar = (gx: number, gy: number) => {
     const hotbarMat = getActiveHotbarMaterial();
@@ -236,6 +156,34 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
       }
       // Consume one item for the whole object
       if (!removeFromActiveSlot()) return;
+
+      // Some objects (torches, stones) placed in the air fall to the ground
+      // with an animation instead of snapping into place.
+      const fallsWhenAirborne =
+        materialId === MaterialId.Torch || materialId === MaterialId.Stone;
+      if (fallsWhenAirborne) {
+        const offsets: [number, number][] = [];
+        for (let dy = -Math.floor(halfH); dy < height - Math.floor(halfH); dy++) {
+          for (let dx = -Math.floor(halfW); dx < width - Math.floor(halfW); dx++) {
+            if (shape === "circle" && (dx / halfW) ** 2 + (dy / halfH) ** 2 > 1) continue;
+            offsets.push([dx, dy]);
+          }
+        }
+        const footFits = (cy: number) =>
+          offsets.every(([dx, dy]) => {
+            const x = gx + dx;
+            const y = cy + dy;
+            return grid.inBounds(x, y) && grid.get(x, y) === MaterialId.Empty;
+          });
+        let restY = gy;
+        while (footFits(restY + 1)) restY++;
+        if (restY > gy) {
+          // Animate the fall; the object is stamped into the grid on landing.
+          state.fallingObjects.push({ materialId, x: gx, y: gy, restY, vy: 0, offsets });
+          return;
+        }
+      }
+
       for (let dy = -Math.floor(halfH); dy < height - Math.floor(halfH); dy++) {
         for (let dx = -Math.floor(halfW); dx < width - Math.floor(halfW); dx++) {
           if (shape === "circle" && (dx / halfW) ** 2 + (dy / halfH) ** 2 > 1) continue;
@@ -284,8 +232,12 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
       return;
     }
     if (state.toolMode === "play" && hasPickaxeEquipped()) {
-      mineInFront();
-      if (state.character) startSwing(state.character);
+      // Mining now happens continuously along the pickaxe arc during the swing
+      // (see mineSwingArc in character.ts). Holding the button auto-repeats swings.
+      if (state.character) {
+        startSwing(state.character);
+        setSwingHeld(state.character, true);
+      }
       painting = false;
       lastGridPos = null;
       return;
@@ -321,6 +273,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
   const end = () => {
     painting = false;
     lastGridPos = null;
+    if (state.character) setSwingHeld(state.character, false);
   };
 
   canvas.addEventListener("mousedown", (e) => start(e.clientX, e.clientY));
