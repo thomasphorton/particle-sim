@@ -1,7 +1,7 @@
 import { Grid } from "./grid.js";
-import { createDefaultInventory, type HotbarItem, type InventoryCounts } from "./inventory.js";
-import { createObjectId, createPlayerId, createRoomId, parseObjectId } from "./ids.js";
-import { MaterialId } from "./materials.js";
+import { cloneHotbar, cloneInventory, createDefaultInventory, type HotbarItem, type InventoryCounts } from "./inventory.js";
+import { parseObjectId, parsePlayerId, parseRoomId } from "./ids.js";
+import { MATERIALS, MaterialId } from "./materials.js";
 import { createDefaultFallingObjectState, createDefaultPlayerState, createDefaultWeatherState, createDefaultWorldState, type FallingObjectState, type PlayerState, type WeatherState, type WorldState } from "./world-state.js";
 
 export const WORLD_STATE_SCHEMA_VERSION = 1;
@@ -71,6 +71,8 @@ export interface WorldStateDto {
   nextObjectOrdinal: number;
 }
 
+const MAX_GRID_CELLS = 1_000_000;
+
 function assertFiniteNumber(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new TypeError(`${label} must be a finite number`);
@@ -92,6 +94,13 @@ function assertInteger(value: unknown, label: string, min?: number, max?: number
   return num;
 }
 
+function assertBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new TypeError(`${label} must be a boolean`);
+  }
+  return value;
+}
+
 function assertObject(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new TypeError(`${label} must be an object`);
@@ -106,11 +115,19 @@ function assertArray(value: unknown, label: string): unknown[] {
   return value;
 }
 
-function assertString(value: unknown, label: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${label} must be a string`);
+function requireField<T>(obj: Record<string, unknown>, key: string, label: string): T {
+  if (!Object.prototype.hasOwnProperty.call(obj, key)) {
+    throw new TypeError(`${label} is required`);
   }
-  return value;
+  return obj[key] as T;
+}
+
+function assertMaterialId(value: unknown, label: string): MaterialId {
+  const materialId = assertInteger(value, label, 0, 255) as MaterialId;
+  if (!Object.prototype.hasOwnProperty.call(MATERIALS, materialId)) {
+    throw new TypeError(`${label} must reference a known material`);
+  }
+  return materialId;
 }
 
 function validateHotbar(value: unknown): HotbarItem[] {
@@ -127,12 +144,9 @@ function validateHotbar(value: unknown): HotbarItem[] {
     if (kind === "empty") return { kind: "empty" };
     if (kind === "pickaxe") return { kind: "pickaxe" };
     if (kind === "material") {
-      const materialId = assertInteger(item["materialId"], `hotbar[${index}].materialId`, 0, 1000);
-      if (!Number.isInteger(materialId)) {
-        throw new TypeError(`hotbar[${index}].materialId must be an integer`);
-      }
+      const materialId = assertMaterialId(item["materialId"], `hotbar[${index}].materialId`);
       const count = assertInteger(item["count"], `hotbar[${index}].count`, 0, 1000);
-      return { kind: "material", materialId: materialId as MaterialId, count };
+      return { kind: "material", materialId, count };
     }
     throw new TypeError(`hotbar[${index}] has unsupported kind`);
   });
@@ -140,6 +154,9 @@ function validateHotbar(value: unknown): HotbarItem[] {
 
 function validateInventory(value: unknown): InventoryCounts {
   const obj = assertObject(value, "inventory");
+  if (!Object.prototype.hasOwnProperty.call(obj, "flowers")) {
+    throw new TypeError("inventory.flowers is required");
+  }
   const normalized: InventoryCounts = createDefaultInventory();
   for (const [key, entry] of Object.entries(obj)) {
     if (key === "flowers") {
@@ -153,97 +170,114 @@ function validateInventory(value: unknown): InventoryCounts {
 
 function validatePlayerState(value: unknown): PlayerState {
   const obj = assertObject(value, "player");
-  const id = createPlayerId(assertString(obj["id"], "player.id"));
+  const id = parsePlayerId(requireField(obj, "id", "player.id"));
   const player = createDefaultPlayerState(id);
-  player.x = assertFiniteNumber(obj["x"], "player.x");
-  player.y = assertFiniteNumber(obj["y"], "player.y");
-  player.vx = assertFiniteNumber(obj["vx"], "player.vx");
-  player.vy = assertFiniteNumber(obj["vy"], "player.vy");
-  player.width = assertFiniteNumber(obj["width"], "player.width");
-  player.height = assertFiniteNumber(obj["height"], "player.height");
-  player.grounded = Boolean(obj["grounded"]);
-  const facing = obj["facing"];
+  player.x = assertFiniteNumber(requireField(obj, "x", "player.x"), "player.x");
+  player.y = assertFiniteNumber(requireField(obj, "y", "player.y"), "player.y");
+  player.vx = assertFiniteNumber(requireField(obj, "vx", "player.vx"), "player.vx");
+  player.vy = assertFiniteNumber(requireField(obj, "vy", "player.vy"), "player.vy");
+  player.width = assertFiniteNumber(requireField(obj, "width", "player.width"), "player.width");
+  player.height = assertFiniteNumber(requireField(obj, "height", "player.height"), "player.height");
+  player.grounded = assertBoolean(requireField(obj, "grounded", "player.grounded"), "player.grounded");
+  const facing = requireField(obj, "facing", "player.facing");
   if (facing !== -1 && facing !== 1) throw new TypeError("player.facing must be -1 or 1");
   player.facing = facing as -1 | 1;
-  player.airTime = assertFiniteNumber(obj["airTime"], "player.airTime");
-  player.crouching = Boolean(obj["crouching"]);
-  player.lookingUp = Boolean(obj["lookingUp"]);
-  player.swimming = Boolean(obj["swimming"]);
-  player.inventory = validateInventory(obj["inventory"]);
-  player.hotbar = validateHotbar(obj["hotbar"]);
-  player.activeHotbarSlot = assertInteger(obj["activeHotbarSlot"], "player.activeHotbarSlot", 0, 9);
+  player.airTime = assertFiniteNumber(requireField(obj, "airTime", "player.airTime"), "player.airTime");
+  player.crouching = assertBoolean(requireField(obj, "crouching", "player.crouching"), "player.crouching");
+  player.lookingUp = assertBoolean(requireField(obj, "lookingUp", "player.lookingUp"), "player.lookingUp");
+  player.swimming = assertBoolean(requireField(obj, "swimming", "player.swimming"), "player.swimming");
+  player.inventory = validateInventory(requireField(obj, "inventory", "player.inventory"));
+  player.hotbar = validateHotbar(requireField(obj, "hotbar", "player.hotbar"));
+  player.activeHotbarSlot = assertInteger(requireField(obj, "activeHotbarSlot", "player.activeHotbarSlot"), "player.activeHotbarSlot", 0, 9);
   return player;
 }
 
 function validateFallingObjectState(value: unknown): FallingObjectState {
   const obj = assertObject(value, "falling object");
-  const id = createObjectId(assertString(obj["id"], "fallingObject.id"));
-  const materialId = assertInteger(obj["materialId"], "fallingObject.materialId", 0, 1000) as MaterialId;
-  const offsets = assertArray(obj["offsets"], "fallingObject.offsets").map((entry) => {
+  const id = parseObjectId(requireField(obj, "id", "fallingObject.id"));
+  const materialId = assertMaterialId(requireField(obj, "materialId", "fallingObject.materialId"), "fallingObject.materialId");
+  const offsets = assertArray(requireField(obj, "offsets", "fallingObject.offsets"), "fallingObject.offsets").map((entry) => {
     const pair = assertArray(entry, "fallingObject.offsets[]");
     if (pair.length !== 2) throw new TypeError("fallingObject.offsets entries must be length 2");
-    return [assertFiniteNumber(pair[0], "fallingObject.offsets[0]"), assertFiniteNumber(pair[1], "fallingObject.offsets[1]")] as [number, number];
+    return [assertInteger(pair[0], "fallingObject.offsets[0]"), assertInteger(pair[1], "fallingObject.offsets[1]")] as [number, number];
   });
   return createDefaultFallingObjectState(
     id,
     materialId,
-    assertFiniteNumber(obj["x"], "fallingObject.x"),
-    assertFiniteNumber(obj["y"], "fallingObject.y"),
-    assertFiniteNumber(obj["restY"], "fallingObject.restY"),
-    assertFiniteNumber(obj["vy"], "fallingObject.vy"),
+    assertInteger(requireField(obj, "x", "fallingObject.x"), "fallingObject.x"),
+    assertInteger(requireField(obj, "y", "fallingObject.y"), "fallingObject.y"),
+    assertInteger(requireField(obj, "restY", "fallingObject.restY"), "fallingObject.restY"),
+    assertFiniteNumber(requireField(obj, "vy", "fallingObject.vy"), "fallingObject.vy"),
     offsets,
   );
 }
 
 function validateWeatherState(value: unknown): WeatherState {
   const obj = assertObject(value, "weather");
-  const kind = obj["kind"];
+  const kind = requireField(obj, "kind", "weather.kind");
   if (kind !== "clear" && kind !== "rain" && kind !== "storm") {
     throw new TypeError("weather.kind must be clear, rain, or storm");
   }
   const weather = createDefaultWeatherState();
   weather.kind = kind as WeatherState["kind"];
-  weather.episodeElapsed = assertInteger(obj["episodeElapsed"], "weather.episodeElapsed", 0, 1000000);
-  weather.episodeDuration = assertInteger(obj["episodeDuration"], "weather.episodeDuration", 0, 1000000);
-  weather.wind = assertInteger(obj["wind"], "weather.wind", -100, 100);
-  weather.visualTime = assertInteger(obj["visualTime"], "weather.visualTime", 0, 1000000);
-  weather.rainAccumulator = assertInteger(obj["rainAccumulator"], "weather.rainAccumulator", 0, 1000000);
-  weather.lightningFlash = typeof obj["lightningFlash"] === "number" ? assertInteger(obj["lightningFlash"], "weather.lightningFlash", 0, 1000000) : null;
-  weather.lightningCooldown = typeof obj["lightningCooldown"] === "number" ? assertInteger(obj["lightningCooldown"], "weather.lightningCooldown", 0, 1000000) : null;
-  weather.boltX = typeof obj["boltX"] === "number" ? assertInteger(obj["boltX"], "weather.boltX") : null;
-  weather.boltY = typeof obj["boltY"] === "number" ? assertInteger(obj["boltY"], "weather.boltY") : null;
-  weather.boltSeed = assertInteger(obj["boltSeed"], "weather.boltSeed", 0, 1000000);
+  weather.episodeElapsed = assertFiniteNumber(requireField(obj, "episodeElapsed", "weather.episodeElapsed"), "weather.episodeElapsed");
+  weather.episodeDuration = assertFiniteNumber(requireField(obj, "episodeDuration", "weather.episodeDuration"), "weather.episodeDuration");
+  weather.wind = assertFiniteNumber(requireField(obj, "wind", "weather.wind"), "weather.wind");
+  weather.visualTime = assertFiniteNumber(requireField(obj, "visualTime", "weather.visualTime"), "weather.visualTime");
+  weather.rainAccumulator = assertFiniteNumber(requireField(obj, "rainAccumulator", "weather.rainAccumulator"), "weather.rainAccumulator");
+  weather.lightningFlash = requireField(obj, "lightningFlash", "weather.lightningFlash") === null ? null : assertFiniteNumber(requireField(obj, "lightningFlash", "weather.lightningFlash"), "weather.lightningFlash");
+  weather.lightningCooldown = requireField(obj, "lightningCooldown", "weather.lightningCooldown") === null ? null : assertFiniteNumber(requireField(obj, "lightningCooldown", "weather.lightningCooldown"), "weather.lightningCooldown");
+  weather.boltX = requireField(obj, "boltX", "weather.boltX") === null ? null : assertFiniteNumber(requireField(obj, "boltX", "weather.boltX"), "weather.boltX");
+  weather.boltY = requireField(obj, "boltY", "weather.boltY") === null ? null : assertFiniteNumber(requireField(obj, "boltY", "weather.boltY"), "weather.boltY");
+  weather.boltSeed = assertFiniteNumber(requireField(obj, "boltSeed", "weather.boltSeed"), "weather.boltSeed");
   return weather;
 }
 
 function validateGrid(value: unknown): Grid {
   const obj = assertObject(value, "grid");
-  const width = assertInteger(obj["width"], "grid.width", 1, 10000);
-  const height = assertInteger(obj["height"], "grid.height", 1, 10000);
-  const ids = assertArray(obj["ids"], "grid.ids");
-  const shade = assertArray(obj["shade"], "grid.shade");
-  const auxiliary = assertArray(obj["auxiliary"], "grid.auxiliary");
-  const objectMembership = assertArray(obj["objectMembership"], "grid.objectMembership");
-  if (ids.length !== width * height) throw new TypeError("grid.ids length mismatch");
-  if (shade.length !== width * height) throw new TypeError("grid.shade length mismatch");
-  if (auxiliary.length !== width * height) throw new TypeError("grid.auxiliary length mismatch");
+  const width = assertInteger(requireField(obj, "width", "grid.width"), "grid.width", 1, 10000);
+  const height = assertInteger(requireField(obj, "height", "grid.height"), "grid.height", 1, 10000);
+  const totalCells = width * height;
+  if (totalCells > MAX_GRID_CELLS) {
+    throw new TypeError("grid dimensions exceed the maximum allowed cell count");
+  }
+  const ids = assertArray(requireField(obj, "ids", "grid.ids"), "grid.ids");
+  const shade = assertArray(requireField(obj, "shade", "grid.shade"), "grid.shade");
+  const auxiliary = assertArray(requireField(obj, "auxiliary", "grid.auxiliary"), "grid.auxiliary");
+  const objectMembership = assertArray(requireField(obj, "objectMembership", "grid.objectMembership"), "grid.objectMembership");
+  if (ids.length !== totalCells) throw new TypeError("grid.ids length mismatch");
+  if (shade.length !== totalCells) throw new TypeError("grid.shade length mismatch");
+  if (auxiliary.length !== totalCells) throw new TypeError("grid.auxiliary length mismatch");
 
   const grid = new Grid(width, height);
   for (let i = 0; i < ids.length; i++) {
-    const materialId = assertInteger(ids[i], `grid.ids[${i}]`, 0, 1000) as MaterialId;
-    const shadeValue = assertInteger(shade[i], `grid.shade[${i}]`, -1000, 1000);
+    const materialId = assertMaterialId(ids[i], `grid.ids[${i}]`);
+    const shadeValue = assertInteger(shade[i], `grid.shade[${i}]`, -128, 127);
     const auxValue = assertInteger(auxiliary[i], `grid.auxiliary[${i}]`, -128, 127);
     grid.ids[i] = materialId;
     grid.shade[i] = shadeValue;
     grid.auxiliary[i] = auxValue;
     grid.objectIds[i] = null;
   }
+  const seenCoordinates = new Set<string>();
+  const materialByObjectId = new Map<string, MaterialId>();
   for (const entry of objectMembership) {
     if (entry === null || typeof entry !== "object") throw new TypeError("grid.objectMembership entries must be objects");
     const item = entry as Record<string, unknown>;
-    const x = assertInteger(item["x"], "grid.objectMembership.x", 0, width - 1);
-    const y = assertInteger(item["y"], "grid.objectMembership.y", 0, height - 1);
-    const objectId = parseObjectId(item["objectId"]);
+    const x = assertInteger(requireField(item, "x", "grid.objectMembership.x"), "grid.objectMembership.x", 0, width - 1);
+    const y = assertInteger(requireField(item, "y", "grid.objectMembership.y"), "grid.objectMembership.y", 0, height - 1);
+    const key = `${x},${y}`;
+    if (seenCoordinates.has(key)) throw new TypeError("grid.objectMembership contains duplicate coordinates");
+    seenCoordinates.add(key);
+    const objectId = parseObjectId(requireField(item, "objectId", "grid.objectMembership.objectId"));
+    const materialId = grid.get(x, y);
+    if (materialId === MaterialId.Empty) throw new TypeError("grid.objectMembership must target a non-empty cell");
+    if (MATERIALS[materialId].placement.kind !== "object") throw new TypeError("grid.objectMembership must target an object-material cell");
+    const previousMaterial = materialByObjectId.get(objectId);
+    if (previousMaterial !== undefined && previousMaterial !== materialId) {
+      throw new TypeError("grid.objectMembership contains inconsistent materials for the same object ID");
+    }
+    materialByObjectId.set(objectId, materialId);
     grid.setObjectCell(x, y, objectId);
   }
   return grid;
@@ -257,7 +291,7 @@ export function serializeWorldState(world: WorldState): WorldStateDto {
     if (!objectId) continue;
     const x = i % grid.width;
     const y = Math.floor(i / grid.width);
-    objectMembership.push({ x, y, objectId: objectId });
+    objectMembership.push({ x, y, objectId });
   }
 
   return {
@@ -296,8 +330,8 @@ export function serializePlayerState(player: PlayerState): PlayerStateDto {
     crouching: player.crouching,
     lookingUp: player.lookingUp,
     swimming: player.swimming,
-    inventory: player.inventory,
-    hotbar: player.hotbar,
+    inventory: cloneInventory(player.inventory),
+    hotbar: cloneHotbar(player.hotbar),
     activeHotbarSlot: player.activeHotbarSlot,
   };
 }
@@ -310,7 +344,7 @@ export function serializeFallingObjectState(objectState: FallingObjectState): Fa
     y: objectState.y,
     restY: objectState.restY,
     vy: objectState.vy,
-    offsets: objectState.offsets,
+    offsets: objectState.offsets.map(([dx, dy]) => [dx, dy] as [number, number]),
   };
 }
 
@@ -330,46 +364,73 @@ export function serializeWeatherState(weather: WeatherState): WeatherStateDto {
   };
 }
 
+function validateObjectIdentityInvariants(world: WorldState): void {
+  const placedIds = new Set<string>();
+  const fallingIds = new Set<string>();
+  for (const objectState of Object.values(world.fallingObjects)) {
+    if (fallingIds.has(objectState.id)) {
+      throw new TypeError("falling object IDs must be unique");
+    }
+    fallingIds.add(objectState.id);
+  }
+  for (let i = 0; i < world.grid.objectIds.length; i++) {
+    const objectId = world.grid.objectIds[i];
+    if (!objectId) continue;
+    if (fallingIds.has(objectId)) {
+      throw new TypeError("falling and placed object IDs must be disjoint");
+    }
+    if (placedIds.has(objectId)) {
+      throw new TypeError("placed object IDs must be unique");
+    }
+    placedIds.add(objectId);
+  }
+}
+
 export function deserializeWorldState(input: unknown): WorldState {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
     throw new TypeError("world state payload must be an object");
   }
   const obj = input as Record<string, unknown>;
-  const version = obj["schemaVersion"];
+  for (const key of ["schemaVersion", "roomId", "grid", "players", "fallingObjects", "paused", "time", "weather", "nextPlayerOrdinal", "nextObjectOrdinal"]) {
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) {
+      throw new TypeError(`${key} is required`);
+    }
+  }
+  const version = requireField(obj, "schemaVersion", "schemaVersion");
   if (version !== WORLD_STATE_SCHEMA_VERSION) {
     throw new TypeError("unsupported world state schema version");
   }
-  const roomId = createRoomId(assertString(obj["roomId"], "roomId"));
+  const roomId = parseRoomId(requireField(obj, "roomId", "roomId"));
   const world = createDefaultWorldState(roomId);
-  world.grid = validateGrid(obj["grid"]);
+  world.grid = validateGrid(requireField(obj, "grid", "grid"));
   world.players = {};
-  if (obj["players"] !== undefined) {
-    const players = assertObject(obj["players"], "players");
-    for (const [key, playerEntry] of Object.entries(players)) {
-      const player = validatePlayerState(playerEntry);
-      world.players[player.id] = player;
-      if (key !== player.id) {
-        throw new TypeError("player key mismatch");
-      }
+  const players = assertObject(requireField(obj, "players", "players"), "players");
+  for (const [key, playerEntry] of Object.entries(players)) {
+    const player = validatePlayerState(playerEntry);
+    world.players[player.id] = player;
+    if (key !== player.id) {
+      throw new TypeError("player key mismatch");
     }
   }
   world.fallingObjects = {};
-  if (obj["fallingObjects"] !== undefined) {
-    const fallingObjects = assertObject(obj["fallingObjects"], "fallingObjects");
-    for (const [key, objectEntry] of Object.entries(fallingObjects)) {
-      const objectState = validateFallingObjectState(objectEntry);
-      world.fallingObjects[objectState.id] = objectState;
-      if (key !== objectState.id) {
-        throw new TypeError("falling object key mismatch");
-      }
+  const fallingObjects = assertObject(requireField(obj, "fallingObjects", "fallingObjects"), "fallingObjects");
+  for (const [key, objectEntry] of Object.entries(fallingObjects)) {
+    const objectState = validateFallingObjectState(objectEntry);
+    world.fallingObjects[objectState.id] = objectState;
+    if (key !== objectState.id) {
+      throw new TypeError("falling object key mismatch");
     }
   }
-  world.paused = Boolean(obj["paused"]);
-  const timeValue = obj["time"];
+  world.paused = assertBoolean(requireField(obj, "paused", "paused"), "paused");
+  const timeValue = requireField(obj, "time", "time");
   const timeObj = typeof timeValue === "object" && timeValue !== null ? (timeValue as Record<string, unknown>) : undefined;
-  world.time.dayNightCycle = assertFiniteNumber(timeObj ? timeObj["dayNightCycle"] : undefined, "time.dayNightCycle");
-  world.weather = validateWeatherState(obj["weather"]);
-  world.nextPlayerOrdinal = assertInteger(obj["nextPlayerOrdinal"], "nextPlayerOrdinal", 1, 1000000);
-  world.nextObjectOrdinal = assertInteger(obj["nextObjectOrdinal"], "nextObjectOrdinal", 1, 1000000);
+  if (!timeObj || !Object.prototype.hasOwnProperty.call(timeObj, "dayNightCycle")) {
+    throw new TypeError("time.dayNightCycle is required");
+  }
+  world.time.dayNightCycle = assertFiniteNumber(timeObj["dayNightCycle"], "time.dayNightCycle");
+  world.weather = validateWeatherState(requireField(obj, "weather", "weather"));
+  world.nextPlayerOrdinal = assertInteger(requireField(obj, "nextPlayerOrdinal", "nextPlayerOrdinal"), "nextPlayerOrdinal", 1, 1000000);
+  world.nextObjectOrdinal = assertInteger(requireField(obj, "nextObjectOrdinal", "nextObjectOrdinal"), "nextObjectOrdinal", 1, 1000000);
+  validateObjectIdentityInvariants(world);
   return world;
 }

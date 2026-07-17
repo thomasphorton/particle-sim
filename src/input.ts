@@ -8,10 +8,9 @@ const PLACEMENT_RADIUS = 30;
 /** Returns true if the grid position is within placement range of the character. */
 function withinPlacementRange(gx: number, gy: number): boolean {
   if (state.toolMode === "editor") return true; // editor ignores radius
-  const char = state.character;
-  if (!char) return true;
-  const cx = char.x + char.width / 2;
-  const cy = char.y + char.height / 2;
+  const player = getLocalPlayer();
+  const cx = player.x + player.width / 2;
+  const cy = player.y + player.height / 2;
   const dx = gx - cx;
   const dy = gy - cy;
   return dx * dx + dy * dy <= PLACEMENT_RADIUS * PLACEMENT_RADIUS;
@@ -83,6 +82,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
     const { shape, width, height } = material.placement;
     const halfW = width / 2;
     const halfH = height / 2;
+    const objectId = allocateObjectId(state.world);
     for (let dy = -Math.floor(halfH); dy < height - Math.floor(halfH); dy++) {
       for (let dx = -Math.floor(halfW); dx < width - Math.floor(halfW); dx++) {
         if (shape === "circle" && (dx / halfW) ** 2 + (dy / halfH) ** 2 > 1) continue;
@@ -90,7 +90,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
         const y = gy + dy;
         if (!grid.inBounds(x, y)) continue;
         if (!withinPlacementRange(x, y)) continue;
-        grid.set(x, y, state.selectedMaterial);
+        grid.set(x, y, state.selectedMaterial, { objectId });
         // Faucets start on low flow
         if (state.selectedMaterial === MaterialId.Faucet) {
           grid.setFaucetFlow(x, y, 1);
@@ -154,6 +154,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
       }
       // Consume one item for the whole object
       if (!removeFromActiveSlot()) return;
+      const objectId = allocateObjectId(state.world);
 
       // Some objects (torches, stones) placed in the air fall to the ground
       // with an animation instead of snapping into place.
@@ -177,7 +178,6 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
         while (footFits(restY + 1)) restY++;
         if (restY > gy) {
           // Animate the fall; the object is stamped into the grid on landing.
-          const objectId = allocateObjectId(state.world);
           state.world.fallingObjects[objectId] = createDefaultFallingObjectState(objectId, materialId, gx, gy, restY, 0, offsets);
           return;
         }
@@ -190,7 +190,7 @@ export function attachInput(canvas: HTMLCanvasElement, grid: Grid, cellSize: num
           const y = gy + dy;
           if (!grid.inBounds(x, y)) continue;
           if (!canPlaceOver(x, y, materialId)) continue;
-          grid.set(x, y, materialId);
+          grid.set(x, y, materialId, { objectId });
           if (materialId === MaterialId.Faucet) grid.setFaucetFlow(x, y, 1);
         }
       }

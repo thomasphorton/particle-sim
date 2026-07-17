@@ -1,6 +1,6 @@
 import { Grid } from "./grid.js";
 import { createDefaultHotbar, createDefaultInventory, type HotbarItem, type InventoryCounts } from "./inventory.js";
-import { createObjectId, createPlayerId, type ObjectId, type PlayerId, type RoomId } from "./ids.js";
+import { createObjectId, createPlayerId, createRoomId, type ObjectId, type PlayerId, type RoomId } from "./ids.js";
 import { MaterialId } from "./materials.js";
 
 export interface WeatherState {
@@ -100,13 +100,15 @@ export function createDefaultPlayerState(id: PlayerId): PlayerState {
 }
 
 export function createDefaultFallingObjectState(id: ObjectId, materialId: MaterialId, x: number, y: number, restY: number, vy: number, offsets: [number, number][]): FallingObjectState {
-  return { id, materialId, x, y, restY, vy, offsets };
+  return { id, materialId, x, y, restY, vy, offsets: offsets.map(([dx, dy]) => [dx, dy] as [number, number]) };
 }
 
 export function createDefaultWorldState(roomId: RoomId | string = "room_default", grid?: Grid): WorldState {
-  const resolvedRoomId = typeof roomId === "string" ? (roomId.startsWith("room_") ? roomId : `room_${roomId}`) : roomId;
+  const roomIdInput = typeof roomId === "string" ? roomId : String(roomId);
+  const normalizedRoomId = roomIdInput.startsWith("room_") ? roomIdInput : `room_${roomIdInput}`;
+  const resolvedRoomId = createRoomId(normalizedRoomId);
   const world: WorldState = {
-    roomId: resolvedRoomId as RoomId,
+    roomId: resolvedRoomId,
     grid: grid ?? new Grid(80, 80),
     players: {},
     fallingObjects: {},
@@ -123,7 +125,7 @@ export function allocatePlayerId(world: WorldState): PlayerId {
   let ordinal = world.nextPlayerOrdinal;
   while (true) {
     const candidate = createPlayerId(`player_${ordinal}`);
-    if (!world.players[candidate]) {
+    if (!Object.prototype.hasOwnProperty.call(world.players, candidate)) {
       world.nextPlayerOrdinal = ordinal + 1;
       return candidate;
     }
@@ -135,9 +137,10 @@ export function allocateObjectId(world: WorldState): ObjectId {
   let ordinal = world.nextObjectOrdinal;
   while (true) {
     const candidate = createObjectId(`object_${ordinal}`);
-    const inFalling = world.fallingObjects[candidate];
-    const inGrid = world.grid.hasObjectId(candidate);
-    if (!inFalling && !inGrid) {
+    const inPlayers = Object.values(world.players).some((player) => String(player.id) === String(candidate));
+    const inFalling = Object.prototype.hasOwnProperty.call(world.fallingObjects, candidate);
+    const inGrid = world.grid.objectIds.some((id) => id === candidate);
+    if (!inPlayers && !inFalling && !inGrid) {
       world.nextObjectOrdinal = ordinal + 1;
       return candidate;
     }

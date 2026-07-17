@@ -1,13 +1,19 @@
 import {
   MaterialId,
+  addToHotbar as addToHotbarHelper,
+  cloneHotbar,
+  cloneInventory,
+  createDefaultHotbar,
+  createDefaultInventory,
   createDefaultPlayerState,
   createDefaultWorldState,
   createPlayerId,
+  removeFromHotbarSlot as removeFromHotbarSlotHelper,
   type PlayerId,
   type PlayerState,
   type WorldState,
 } from "@particle-sim/shared";
-import type { Character } from "./character";
+import type { CharacterRuntime } from "./character";
 
 export type ToolMode = "editor" | "place" | "play";
 export type DayNightPreset = "morning" | "day" | "dusk" | "night";
@@ -29,41 +35,26 @@ export interface SimState {
   hoverPixel: { x: number; y: number } | null;
   /** Active snip animation, if any. */
   snip: SnipAnimation | null;
-  /** The player character. */
-  character: Character | null;
+  /** The player character runtime. */
+  character: CharacterRuntime | null;
   /** Current tool mode. */
   toolMode: ToolMode;
 }
 
 function getLocalPlayerState(): PlayerState {
-  const player = state.world.players[state.localPlayerId];
+  let player = state.world.players[state.localPlayerId];
   if (!player) {
-   const created = createDefaultPlayerState(state.localPlayerId);
-   state.world.players[state.localPlayerId] = created;
-   return created;
+   player = createDefaultPlayerState(state.localPlayerId);
+   state.world.players[state.localPlayerId] = player;
   }
   return player;
 }
 
 function syncWorldDefaults(): void {
   const player = getLocalPlayerState();
-  if (!player.hotbar || player.hotbar.length !== 10) {
-   player.hotbar = [
-     { kind: "pickaxe" },
-     { kind: "material", materialId: MaterialId.Seed, count: 5 },
-     { kind: "material", materialId: MaterialId.Torch, count: 5 },
-     { kind: "material", materialId: MaterialId.Clock, count: 1 },
-     { kind: "empty" },
-     { kind: "empty" },
-     { kind: "empty" },
-     { kind: "empty" },
-     { kind: "empty" },
-     { kind: "empty" },
-   ];
-  }
-  if (!player.inventory || typeof player.inventory.flowers !== "number") {
-   player.inventory = { flowers: 0 };
-  }
+  const defaults = createDefaultInventory();
+  player.inventory = { ...defaults, ...cloneInventory(player.inventory) };
+  player.hotbar = player.hotbar.length === 10 ? cloneHotbar(player.hotbar) : createDefaultHotbar();
 }
 
 export const state: SimState = {
@@ -114,27 +105,7 @@ export function getActiveHotbarMaterial(): (NonNullable<PlayerState["hotbar"][nu
  */
 export function addToHotbar(materialId: MaterialId, amount: number = 1): boolean {
   const player = getLocalPlayer();
-  let remaining = amount;
-
-  for (let i = 0; i < player.hotbar.length && remaining > 0; i++) {
-   const slot = player.hotbar[i];
-   if (slot.kind === "material" && slot.materialId === materialId && slot.count < 1000) {
-     const space = 1000 - slot.count;
-     const add = Math.min(remaining, space);
-     slot.count += add;
-     remaining -= add;
-   }
-  }
-
-  for (let i = 0; i < player.hotbar.length && remaining > 0; i++) {
-   if (player.hotbar[i].kind === "empty") {
-     const add = Math.min(remaining, 1000);
-     player.hotbar[i] = { kind: "material", materialId, count: add };
-     remaining -= add;
-   }
-  }
-
-  return remaining === 0;
+  return addToHotbarHelper(player.hotbar, materialId, amount);
 }
 
 /**
@@ -143,17 +114,15 @@ export function addToHotbar(materialId: MaterialId, amount: number = 1): boolean
  */
 export function removeFromActiveSlot(): boolean {
   const player = getLocalPlayer();
-  const slot = player.hotbar[player.activeHotbarSlot];
-  if (slot?.kind !== "material") return false;
-  slot.count -= 1;
-  if (slot.count <= 0) {
-   player.hotbar[player.activeHotbarSlot] = { kind: "empty" };
+  const success = removeFromHotbarSlotHelper(player.hotbar, player.activeHotbarSlot);
+  if (!success) return false;
+  if (player.hotbar[player.activeHotbarSlot]?.kind === "empty") {
    for (let offset = 1; offset < player.hotbar.length; offset++) {
      const prev = player.activeHotbarSlot - offset;
      if (prev < 0) break;
      if (player.hotbar[prev].kind !== "empty") {
        player.activeHotbarSlot = prev;
-       return true;
+       break;
      }
    }
   }

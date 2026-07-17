@@ -54,12 +54,12 @@ test("serialize and deserialize preserves world state", () => {
   world.fallingObjects[objectId] = { id: objectId, materialId: MaterialId.Stone, x: 2, y: 1, restY: 5, vy: 0, offsets: [[0, 0], [1, 0]] };
   world.grid.set(1, 1, MaterialId.Dirt);
   world.grid.set(2, 1, MaterialId.Water);
-  world.grid.set(1, 1, MaterialId.Dirt, { objectId: createObjectId("object_99") });
+  world.grid.set(1, 1, MaterialId.Stone, { objectId: createObjectId("object_99") });
   const dto = serializeWorldState(world);
   const restored = deserializeWorldState(dto);
   assert.equal(restored.roomId, "room_roundtrip");
   assert.equal(restored.grid.width, world.grid.width);
-  assert.equal(restored.grid.get(1, 1), MaterialId.Dirt);
+  assert.equal(restored.grid.get(1, 1), MaterialId.Stone);
   assert.equal(restored.players[playerId].inventory.stone, 4);
   assert.equal(restored.fallingObjects[objectId].materialId, MaterialId.Stone);
   assert.equal(restored.weather.kind, "clear");
