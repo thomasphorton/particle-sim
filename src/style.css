@@ -152,13 +152,13 @@ h1 {
   color: var(--text-dim);
 }
 
-.time-group {
+.preset-group {
   display: flex;
   gap: 6px;
   align-items: center;
 }
 
-.time-group button {
+.preset-group button {
   padding: 6px 12px;
   border-radius: 6px;
   border: 1px solid var(--border);
@@ -169,11 +169,11 @@ h1 {
   transition: all 0.15s ease;
 }
 
-.time-group button:hover {
+.preset-group button:hover {
   border-color: var(--accent);
 }
 
-.time-group button.active {
+.preset-group button.active {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
@@ -218,6 +218,37 @@ h1 {
   color: var(--text);
   font-size: 14px;
   user-select: none;
+}
+
+.weather-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid #3a4252;
+  border-radius: 999px;
+  background: #202936;
+  color: #edf5ff;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+
+.weather-badge[data-weather="rain"] {
+  border-color: #426987;
+  background: #202d3b;
+}
+
+.weather-badge[data-weather="wind"] {
+  border-color: #516878;
+  background: #25303a;
+}
+
+.weather-badge[data-weather="thunderstorm"] {
+  border-color: #655f91;
+  background: #29283d;
 }
 
 .inventory-item {
@@ -343,6 +374,12 @@ h1 {
   transform: translateY(1px);
 }
 
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid #d8b4fe;
+  outline-offset: 2px;
+}
+
 .touch-btn-jump {
   width: 64px;
   height: 64px;
@@ -362,5 +399,13 @@ h1 {
 
   .hotbar-count {
     font-size: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preset-group button,
+  .tool-group button,
+  .hotbar-slot {
+    transition: none;
   }
 }

@@ -3,6 +3,8 @@ import { MATERIALS, MaterialId } from "./materials";
 import { setDayNightPreset, state } from "./state";
 import type { HotbarItem } from "./state";
 import { setTouchControl } from "./character";
+import { weather } from "./weather";
+import type { WeatherKind } from "./weather";
 
 const PALETTE: MaterialId[] = [
   MaterialId.Sand,
@@ -85,7 +87,7 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
 
   // Time-of-day presets (edit mode only)
   const timeGroup = document.createElement("div");
-  timeGroup.className = "time-group";
+  timeGroup.className = "preset-group time-group";
   const timePresets = [
     { label: "Morning", preset: "morning" as const },
     { label: "Day", preset: "day" as const },
@@ -95,6 +97,7 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
   const timeButtons: HTMLButtonElement[] = [];
   for (const { label, preset } of timePresets) {
     const btn = document.createElement("button");
+    btn.type = "button";
     btn.textContent = label;
     btn.addEventListener("click", () => {
       setDayNightPreset(preset);
@@ -102,6 +105,24 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
     });
     timeButtons.push(btn);
     timeGroup.appendChild(btn);
+  }
+
+  const weatherGroup = document.createElement("div");
+  weatherGroup.className = "preset-group weather-group";
+  const weatherPresets: { label: string; kind: WeatherKind }[] = [
+    { label: "Clear", kind: "clear" },
+    { label: "Rain", kind: "rain" },
+    { label: "Wind", kind: "wind" },
+    { label: "Storm", kind: "thunderstorm" },
+  ];
+  const weatherButtons = new Map<WeatherKind, HTMLButtonElement>();
+  for (const { label, kind } of weatherPresets) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = label;
+    btn.addEventListener("click", () => weather.setWeather(kind));
+    weatherButtons.set(kind, btn);
+    weatherGroup.appendChild(btn);
   }
 
   // Edit panel: material palette, brush size, and time presets.
@@ -121,6 +142,7 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
     makeSection("Materials", materialGroup),
     makeSection("Brush", brushGroup),
     makeSection("Time of day", timeGroup),
+    makeSection("Weather", weatherGroup),
   );
 
   // Tool mode toggle
@@ -157,7 +179,42 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
   };
   requestAnimationFrame(updateFlowerCounter);
 
-  toolbar.append(toolGroup, actionGroup, flowerCounter);
+  const weatherBadge = document.createElement("span");
+  weatherBadge.className = "weather-badge";
+  weatherBadge.setAttribute("role", "status");
+  weatherBadge.setAttribute("aria-live", "polite");
+  const weatherLabels: Record<WeatherKind, { icon: string; name: string }> = {
+    clear: { icon: "☀️", name: "Clear" },
+    rain: { icon: "🌧️", name: "Rain" },
+    wind: { icon: "💨", name: "Wind" },
+    thunderstorm: { icon: "⛈️", name: "Storm" },
+  };
+  let previousWeatherText = "";
+  const updateWeatherBadge = () => {
+    const current = weather.snapshot;
+    const label = weatherLabels[current.kind];
+    const windPercent = Math.round(Math.abs(current.wind) * 100);
+    const windText = windPercent < 2 ? "Calm" : `${current.wind < 0 ? "←" : "→"} ${windPercent}%`;
+    const text = `${label.icon} ${label.name} · ${windText}`;
+    if (text !== previousWeatherText) {
+      weatherBadge.textContent = text;
+      weatherBadge.setAttribute(
+        "aria-label",
+        `${label.name} weather. ${windPercent < 2 ? "Calm" : `Wind ${current.wind < 0 ? "left" : "right"}, intensity ${windPercent} percent`}.`,
+      );
+      weatherBadge.dataset.weather = current.kind;
+      previousWeatherText = text;
+    }
+    for (const [kind, button] of weatherButtons) {
+      const active = kind === current.kind;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    }
+    requestAnimationFrame(updateWeatherBadge);
+  };
+  requestAnimationFrame(updateWeatherBadge);
+
+  toolbar.append(toolGroup, actionGroup, flowerCounter, weatherBadge);
   root.append(toolbar, editPanel);
 
   const touchHost = root.parentElement ?? root;

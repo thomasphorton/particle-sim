@@ -1,12 +1,13 @@
 import { Grid } from "./grid";
 import { FLOWER_PALETTE, MATERIALS, MaterialId, MaterialPhase } from "./materials";
+import { chooseWindBiasedDirection } from "./weather";
 
-function randDir(): 1 | -1 {
-  return Math.random() < 0.5 ? -1 : 1;
+function randDir(id: MaterialId, wind: number): 1 | -1 {
+  return chooseWindBiasedDirection(id, wind);
 }
 
 /** Runs one step of the cellular automaton over the whole grid. */
-export function step(grid: Grid): void {
+export function step(grid: Grid, wind: number = 0): void {
   grid.resetUpdated();
 
   // Bottom-to-top so a cell that falls this frame isn't re-processed lower down.
@@ -22,13 +23,13 @@ export function step(grid: Grid): void {
       switch (material.phase) {
         case MaterialPhase.Powder:
           if (id === MaterialId.Seed) {
-            updateSeed(grid, x, y, material.density);
+            updateSeed(grid, x, y, material.density, wind);
           } else {
-            updatePowder(grid, x, y, material.density);
+            updatePowder(grid, x, y, id, material.density, wind);
           }
           break;
         case MaterialPhase.Liquid:
-          updateLiquid(grid, x, y, material.density, material.flowRate ?? 3);
+          updateLiquid(grid, x, y, id, material.density, material.flowRate ?? 3, wind);
           break;
         case MaterialPhase.Solid:
           if (id === MaterialId.Stem) {
@@ -94,14 +95,21 @@ function moveCell(grid: Grid, x: number, y: number, nx: number, ny: number): voi
 }
 
 /** Attempts to fall straight down or diagonally; returns whether it moved. */
-function tryFallPowder(grid: Grid, x: number, y: number, density: number): boolean {
+function tryFallPowder(
+  grid: Grid,
+  x: number,
+  y: number,
+  id: MaterialId,
+  density: number,
+  wind: number,
+): boolean {
   const below = grid.get(x, y + 1);
   if (canDisplace(below, density)) {
     moveCell(grid, x, y, x, y + 1);
     return true;
   }
 
-  const dir = randDir();
+  const dir = randDir(id, wind);
   for (const dx of [dir, -dir] as const) {
     const diag = grid.get(x + dx, y + 1);
     if (canDisplace(diag, density)) {
@@ -112,8 +120,15 @@ function tryFallPowder(grid: Grid, x: number, y: number, density: number): boole
   return false;
 }
 
-function updatePowder(grid: Grid, x: number, y: number, density: number): void {
-  tryFallPowder(grid, x, y, density);
+function updatePowder(
+  grid: Grid,
+  x: number,
+  y: number,
+  id: MaterialId,
+  density: number,
+  wind: number,
+): void {
+  tryFallPowder(grid, x, y, id, density, wind);
 }
 
 // Range of segments a stem grows before it blooms, randomized per seed so
@@ -140,8 +155,8 @@ const SEED_GERMINATION_NEIGHBORS: [number, number][] = [
 const SEED_DESPAWN_CHANCE = 0.003;
 
 /** Falls like sand; once settled, sprouts in wet dirt or eventually despawns. */
-function updateSeed(grid: Grid, x: number, y: number, density: number): void {
-  if (tryFallPowder(grid, x, y, density)) return;
+function updateSeed(grid: Grid, x: number, y: number, density: number, wind: number): void {
+  if (tryFallPowder(grid, x, y, MaterialId.Seed, density, wind)) return;
 
   // Seeds can push through grass — replace the grass cell below
   const below = grid.get(x, y + 1);
@@ -537,8 +552,10 @@ function updateLiquid(
   grid: Grid,
   x: number,
   y: number,
+  id: MaterialId,
   density: number,
   flowRate: number,
+  wind: number,
 ): void {
   // Water touching a drain is sucked away immediately, before any normal movement.
   for (const [dx, dy] of ORTHOGONAL_NEIGHBORS) {
@@ -552,7 +569,7 @@ function updateLiquid(
   const below = skipPlants(grid, x, y, 0, 1);
   if (canDisplace(below.id, density)) {
     const vx = grid.getVx(x, y);
-    const driftDir = vx !== 0 ? (vx > 0 ? 1 : -1) : randDir();
+    const driftDir = vx !== 0 ? (vx > 0 ? 1 : -1) : randDir(id, wind);
     // Falling water keeps a little drift from how it was already flowing
     // (inertia from spreading along a ledge before it dropped), plus rare
     // random turbulence, instead of always snapping straight down.
@@ -569,7 +586,7 @@ function updateLiquid(
     return;
   }
 
-  const dir = randDir();
+  const dir = randDir(id, wind);
   for (const dx of [dir, -dir] as const) {
     const diag = skipPlants(grid, x, y, dx, 1);
     if (canDisplace(diag.id, density)) {

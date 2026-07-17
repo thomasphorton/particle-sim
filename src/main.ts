@@ -9,6 +9,7 @@ import { MATERIALS, MaterialId } from "./materials";
 import { findFlowerCluster } from "./harvest";
 import { createCharacter, attachCharacterInput, updateCharacter, drawCharacter } from "./character";
 import { updateFallingObjects } from "./falling";
+import { weather } from "./weather";
 
 const CELL_SIZE = 5;
 const GRID_WIDTH = 320;
@@ -159,7 +160,8 @@ function loop(): void {
 
   if (!state.paused) {
     state.dayNightCycle += dt / 300;
-    step(grid);
+    weather.update(dt, grid);
+    step(grid, weather.snapshot.wind);
     updateCharacter(character, grid, dt);
     updateFallingObjects(grid, dt);
   }
@@ -248,6 +250,7 @@ function loop(): void {
     );
   }
 
+  renderer.drawWeather();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

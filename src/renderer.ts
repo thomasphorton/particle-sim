@@ -2,6 +2,8 @@ import { Grid } from "./grid";
 import { FLOWER_PALETTE, MATERIALS, MaterialId } from "./materials";
 import type { ObjectPlacement } from "./materials";
 import { state } from "./state";
+import { LIGHTNING_FLASH_SECONDS, weather } from "./weather";
+import type { WeatherSnapshot } from "./weather";
 
 interface CloudPuff {
   dx: number; // base offset in grid cells
@@ -253,6 +255,7 @@ export class Renderer {
       this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
     }
 
+    this.drawWeatherAtmosphere();
     this.drawTorchLights(grid);
     this.drawTorchHandles(grid);
     this.drawTorchFlames(grid);
@@ -260,6 +263,118 @@ export class Renderer {
     this.drawClockFaces(grid);
     this.drawObjectOutlines(grid);
     this.drawFaucetDials(grid);
+  }
+
+  /**
+   * Drawn by the main loop after the character and previews so precipitation
+   * and lightning sit over the final world composition.
+   */
+  drawWeather(): void {
+    const current = weather.snapshot;
+    if (current.kind === "wind") this.drawWindStreaks(current);
+    if (current.kind === "rain" || current.kind === "thunderstorm") {
+      this.drawRain(current);
+    }
+    if (current.lightningFlashRemaining > 0) {
+      this.drawLightning(current);
+    }
+  }
+
+  private drawWeatherAtmosphere(): void {
+    const kind = weather.snapshot.kind;
+    if (kind !== "rain" && kind !== "thunderstorm") return;
+    this.ctx.fillStyle = kind === "thunderstorm"
+      ? "rgba(8, 14, 28, 0.2)"
+      : "rgba(12, 24, 38, 0.08)";
+    this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
+  }
+
+  private drawRain(current: WeatherSnapshot): void {
+    const { width, height } = this.ctx.canvas;
+    const storm = current.kind === "thunderstorm";
+    const count = storm ? 210 : 130;
+    const speed = storm ? 1150 : 820;
+    const slant = current.wind * (storm ? 28 : 18);
+    const travel = height + 80;
+
+    this.ctx.save();
+    this.ctx.strokeStyle = storm
+      ? "rgba(174, 218, 255, 0.68)"
+      : "rgba(174, 218, 255, 0.52)";
+    this.ctx.lineWidth = storm ? 1.5 : 1;
+    this.ctx.beginPath();
+    for (let i = 0; i < count; i++) {
+      const phase = this.hash(i * 2.71 + 0.4);
+      const baseX = this.hash(i * 5.17 + 8.2) * (width + 120) - 60;
+      const y = (phase * travel + current.visualTime * speed) % travel - 40;
+      const x = ((baseX + current.visualTime * slant) % (width + 120) + width + 120) % (width + 120) - 60;
+      const length = (storm ? 17 : 11) + this.hash(i * 1.83) * (storm ? 16 : 10);
+      this.ctx.moveTo(x, y);
+      this.ctx.lineTo(x - slant * 0.24, y - length);
+    }
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+
+  private drawWindStreaks(current: WeatherSnapshot): void {
+    const { width, height } = this.ctx.canvas;
+    const direction = current.wind < 0 ? -1 : 1;
+    const speed = 280 + Math.abs(current.wind) * 260;
+
+    this.ctx.save();
+    this.ctx.strokeStyle = "rgba(210, 232, 246, 0.3)";
+    this.ctx.lineWidth = 1.2;
+    this.ctx.beginPath();
+    for (let i = 0; i < 22; i++) {
+      const y = 35 + this.hash(i * 4.1) * (height - 70);
+      const span = 24 + this.hash(i * 2.3 + 2) * 52;
+      const travel = width + span * 2;
+      const phase = this.hash(i * 7.7) * travel;
+      const progress = (phase + current.visualTime * speed) % travel;
+      const x = direction > 0 ? progress - span : width + span - progress;
+      this.ctx.moveTo(x, y);
+      this.ctx.lineTo(x - direction * span, y + Math.sin(i) * 2);
+    }
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+
+  private drawLightning(current: WeatherSnapshot): void {
+    const { width, height } = this.ctx.canvas;
+    const flashProgress = current.lightningFlashRemaining / LIGHTNING_FLASH_SECONDS;
+
+    this.ctx.save();
+    this.ctx.fillStyle = `rgba(214, 228, 255, ${0.12 + flashProgress * 0.16})`;
+    this.ctx.fillRect(0, 0, width, height);
+
+    const points: [number, number][] = [];
+    let x = current.lightningBoltX * width;
+    let y = -10;
+    points.push([x, y]);
+    for (let i = 1; i <= 9; i++) {
+      y = i * height * 0.085;
+      x += (this.hash(current.lightningBoltSeed * 97 + i * 3.31) - 0.5) * width * 0.075;
+      points.push([x, y]);
+    }
+
+    const strokeBolt = (color: string, lineWidth: number, blur: number) => {
+      this.ctx.strokeStyle = color;
+      this.ctx.lineWidth = lineWidth;
+      this.ctx.shadowColor = "rgba(175, 208, 255, 0.9)";
+      this.ctx.shadowBlur = blur;
+      this.ctx.beginPath();
+      this.ctx.moveTo(points[0][0], points[0][1]);
+      for (let i = 1; i < points.length; i++) this.ctx.lineTo(points[i][0], points[i][1]);
+      this.ctx.stroke();
+    };
+    strokeBolt("rgba(144, 190, 255, 0.5)", 8, 18);
+    strokeBolt("rgba(242, 248, 255, 0.98)", 2, 6);
+    this.ctx.restore();
+  }
+
+  private hash(value: number): number {
+    const result = Math.sin(value * 12.9898) * 43758.5453;
+    return result - Math.floor(result);
   }
 
   /**
