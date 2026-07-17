@@ -147,7 +147,7 @@ buildUi(uiRoot, grid);
 
 const canvas = document.querySelector<HTMLCanvasElement>("#sim-canvas")!;
 const renderer = new Renderer(canvas, grid, CELL_SIZE);
-attachInput(canvas, grid, CELL_SIZE);
+attachInput(canvas, state.world, CELL_SIZE);
 
 const runtime = createCharacter(grid);
 state.character = runtime;
@@ -164,7 +164,7 @@ function loop(): void {
     state.world.time.dayNightCycle += dt / 300;
     step(grid);
     updateCharacter(getLocalPlayer(), runtime, grid, dt);
-    updateFallingObjects(grid, dt);
+    updateFallingObjects(state.world, dt);
   }
   renderer.draw(grid);
   drawCharacter(renderer.getCtx(), getLocalPlayer(), runtime, CELL_SIZE);

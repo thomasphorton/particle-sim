@@ -1,5 +1,4 @@
-import { Grid } from "@particle-sim/shared";
-import { state } from "./state";
+import { type WorldState } from "@particle-sim/shared";
 
 // Match the character's gravity model so falling objects feel consistent.
 const GRAVITY = 0.4; // cells / frame^2
@@ -10,8 +9,9 @@ const TERMINAL_VY = 3; // cells / frame
  * ground. On landing, the object's footprint is stamped into the grid and the
  * entity is removed from the animation list.
  */
-export function updateFallingObjects(grid: Grid, dt: number): void {
-  const fallingEntries = Object.entries(state.world.fallingObjects);
+export function updateFallingObjects(world: WorldState, dt: number): void {
+  const grid = world.grid;
+  const fallingEntries = Object.entries(world.fallingObjects);
   if (fallingEntries.length === 0) return;
   const dtFrames = Math.min(dt * 60, 3);
 
@@ -26,7 +26,7 @@ export function updateFallingObjects(grid: Grid, dt: number): void {
         const y = o.restY + dy;
         if (grid.inBounds(x, y)) grid.set(x, y, o.materialId, { objectId: o.id });
       }
-      delete state.world.fallingObjects[objectId];
+      delete world.fallingObjects[objectId];
     }
   }
 }
