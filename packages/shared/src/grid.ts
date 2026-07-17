@@ -132,6 +132,11 @@ export class Grid {
     return this.objectIds[i] ?? null;
   }
 
+  clearObjectCell(x: number, y: number): void {
+    const i = this.assertInBounds(x, y);
+    this.objectIds[i] = null;
+  }
+
   hasObjectId(objectId: ObjectId): boolean {
     return this.objectIds.includes(objectId);
   }
@@ -167,11 +172,11 @@ export class Grid {
   getVx(x: number, y: number): number {
     switch (this.get(x, y)) {
       case MaterialId.Water:
-        return this.getWaterLevel(x, y);
+        return this.getWaterLiquidMemory(x, y);
       case MaterialId.Faucet:
         return this.getFaucetFlow(x, y);
       case MaterialId.Flower:
-        return this.getFlowerPaletteIndex(x, y);
+        return this.getFlowerPalette(x, y);
       case MaterialId.Dirt:
         return this.getDirtMoisture(x, y);
       case MaterialId.Stem:
@@ -184,13 +189,13 @@ export class Grid {
   setVx(x: number, y: number, value: number): void {
     switch (this.get(x, y)) {
       case MaterialId.Water:
-        this.setWaterLevel(x, y, value);
+        this.setWaterLiquidMemory(x, y, value);
         return;
       case MaterialId.Faucet:
         this.setFaucetFlow(x, y, value);
         return;
       case MaterialId.Flower:
-        this.setFlowerPaletteIndex(x, y, value);
+        this.setFlowerPalette(x, y, value);
         return;
       case MaterialId.Dirt:
         this.setDirtMoisture(x, y, value);
@@ -203,16 +208,24 @@ export class Grid {
     }
   }
 
-  getWaterLevel(x: number, y: number): number {
-    if (this.get(x, y) !== MaterialId.Water) throw new TypeError("water level requires a water cell");
+  getWaterLiquidMemory(x: number, y: number): number {
+    if (this.get(x, y) !== MaterialId.Water) throw new TypeError("water liquid memory requires a water cell");
     return this.getAuxiliaryValue(x, y);
   }
 
-  setWaterLevel(x: number, y: number, value: number): void {
-    if (this.get(x, y) !== MaterialId.Water) throw new TypeError("water level requires a water cell");
-    const integer = assertInteger(value, "water level");
-    if (integer < -4 || integer > 4) throw new RangeError("water level must be between -4 and 4");
+  setWaterLiquidMemory(x: number, y: number, value: number): void {
+    if (this.get(x, y) !== MaterialId.Water) throw new TypeError("water liquid memory requires a water cell");
+    const integer = assertInteger(value, "water liquid memory");
+    if (integer < -4 || integer > 4) throw new RangeError("water liquid memory must be between -4 and 4");
     this.setAuxiliaryValue(x, y, integer);
+  }
+
+  getWaterLevel(x: number, y: number): number {
+    return this.getWaterLiquidMemory(x, y);
+  }
+
+  setWaterLevel(x: number, y: number, value: number): void {
+    this.setWaterLiquidMemory(x, y, value);
   }
 
   getFaucetFlow(x: number, y: number): number {
@@ -227,16 +240,24 @@ export class Grid {
     this.setAuxiliaryValue(x, y, integer);
   }
 
-  getFlowerPaletteIndex(x: number, y: number): number {
+  getFlowerPalette(x: number, y: number): number {
     if (this.get(x, y) !== MaterialId.Flower) throw new TypeError("flower palette requires a flower cell");
     return this.getAuxiliaryValue(x, y);
   }
 
-  setFlowerPaletteIndex(x: number, y: number, value: number): void {
+  setFlowerPalette(x: number, y: number, value: number): void {
     if (this.get(x, y) !== MaterialId.Flower) throw new TypeError("flower palette requires a flower cell");
     const integer = assertInteger(value, "flower palette index");
     if (integer < 0 || integer >= FLOWER_PALETTE.length) throw new RangeError("flower palette index is out of range");
     this.setAuxiliaryValue(x, y, integer);
+  }
+
+  getFlowerPaletteIndex(x: number, y: number): number {
+    return this.getFlowerPalette(x, y);
+  }
+
+  setFlowerPaletteIndex(x: number, y: number, value: number): void {
+    this.setFlowerPalette(x, y, value);
   }
 
   getDirtMoisture(x: number, y: number): number {

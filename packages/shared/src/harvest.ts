@@ -62,7 +62,7 @@ export function harvestFlowerCluster(grid: Grid, startX: number, startY: number)
     // BFS within flower cells that share the same color variant.
     // Each bloom assigns one color to all its cells, so this separates
     // overlapping blooms that happen to touch.
-    const colorVariant = grid.getFlowerPaletteIndex(idx % grid.width, Math.floor(idx / grid.width));
+    const colorVariant = grid.getFlowerPalette(idx % grid.width, Math.floor(idx / grid.width));
     const q = [idx];
     visited.add(idx);
     while (q.length > 0) {
@@ -74,7 +74,7 @@ export function harvestFlowerCluster(grid: Grid, startX: number, startY: number)
         const ny = cy + dy;
         const k = ny * grid.width + nx;
         if (flowerIndices.has(k) && !visited.has(k)) {
-          const neighborColorVariant = grid.getFlowerPaletteIndex(nx, ny);
+          const neighborColorVariant = grid.getFlowerPalette(nx, ny);
           if (neighborColorVariant === colorVariant) {
             visited.add(k);
             q.push(k);

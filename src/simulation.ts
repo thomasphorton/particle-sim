@@ -274,13 +274,13 @@ function bloom(grid: Grid, x: number, y: number): void {
   const place = (px: number, py: number, shade?: number) => {
     if (grid.get(px, py) === MaterialId.Empty) {
       grid.set(px, py, MaterialId.Flower, { shade });
-      grid.setFlowerPaletteIndex(px, py, colorVariant);
+      grid.setFlowerPalette(px, py, colorVariant);
     }
   };
 
   // Center — dark pistil
   grid.set(x, y, MaterialId.Flower, { shade: -40 });
-  grid.setFlowerPaletteIndex(x, y, colorVariant);
+  grid.setFlowerPalette(x, y, colorVariant);
 
   // Inner ring — standard brightness
   const inner: [number, number][] = [
@@ -351,7 +351,7 @@ function updateSprinkler(grid: Grid, x: number, y: number): void {
   if (grid.inBounds(tx, ty) && grid.get(tx, ty) === MaterialId.Empty) {
     grid.set(tx, ty, MaterialId.Water);
     // Give a small drift in spray direction so it flows outward
-    grid.setWaterLevel(tx, ty, dir);
+    grid.setWaterLiquidMemory(tx, ty, dir);
     grid.markUpdated(tx, ty);
   }
 }
@@ -550,7 +550,7 @@ function updateLiquid(
 
   const below = skipPlants(grid, x, y, 0, 1);
   if (canDisplace(below.id, density)) {
-    const vx = grid.getWaterLevel(x, y);
+    const vx = grid.getWaterLiquidMemory(x, y);
     const driftDir = vx !== 0 ? (vx > 0 ? 1 : -1) : randDir();
     // Falling water keeps a little drift from how it was already flowing
     // (inertia from spreading along a ledge before it dropped), plus rare
@@ -559,12 +559,12 @@ function updateLiquid(
       const diag = skipPlants(grid, x, y, driftDir, 1);
       if (canDisplace(diag.id, density)) {
         moveCell(grid, x, y, diag.x, diag.y);
-        grid.setWaterLevel(diag.x, diag.y, Math.random() < DRIFT_DECAY_CHANCE ? 0 : driftDir);
+        grid.setWaterLiquidMemory(diag.x, diag.y, Math.random() < DRIFT_DECAY_CHANCE ? 0 : driftDir);
         return;
       }
     }
     moveCell(grid, x, y, below.x, below.y);
-    grid.setWaterLevel(below.x, below.y, Math.random() < DRIFT_DECAY_CHANCE ? 0 : vx);
+    grid.setWaterLiquidMemory(below.x, below.y, Math.random() < DRIFT_DECAY_CHANCE ? 0 : vx);
     return;
   }
 
@@ -575,14 +575,14 @@ function updateLiquid(
       moveCell(grid, x, y, diag.x, diag.y);
       // Decayed like the other fall-related writes, so a diagonal drop doesn't
       // leave behind a long-lived direction that later blocks sideways spread.
-      grid.setWaterLevel(diag.x, diag.y, Math.random() < DRIFT_DECAY_CHANCE ? 0 : dx);
+      grid.setWaterLiquidMemory(diag.x, diag.y, Math.random() < DRIFT_DECAY_CHANCE ? 0 : dx);
       return;
     }
   }
 
   // Spread sideways: find the farthest reachable empty cell in a random direction,
   // treating any stems in the way as see-through rather than a stopping obstacle.
-  const lastJump = grid.getWaterLevel(x, y);
+  const lastJump = grid.getWaterLiquidMemory(x, y);
   for (const dx of [dir, -dir] as const) {
     let farthest = -1;
     for (let step = 1; step <= flowRate; step++) {
@@ -607,7 +607,7 @@ function updateLiquid(
     if (delta === -lastJump) continue;
 
     moveCell(grid, x, y, x + delta, y);
-    grid.setWaterLevel(x + delta, y, Math.random() < SPREAD_MEMORY_DECAY_CHANCE ? 0 : delta);
+    grid.setWaterLiquidMemory(x + delta, y, Math.random() < SPREAD_MEMORY_DECAY_CHANCE ? 0 : delta);
     return;
   }
 

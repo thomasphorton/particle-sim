@@ -218,7 +218,7 @@ export class Renderer {
       const shade = grid.shade[i];
       const o = i * 4;
       // Flowers store their randomly-chosen bloom color's palette index in material-specific auxiliary state.
-      const color = id === MaterialId.Flower ? FLOWER_PALETTE[grid.getFlowerPaletteIndex(Math.floor(i % grid.width), Math.floor(i / grid.width))] : material.color;
+      const color = id === MaterialId.Flower ? FLOWER_PALETTE[grid.getFlowerPalette(Math.floor(i % grid.width), Math.floor(i / grid.width))] : material.color;
       // Wet dirt gets progressively darker based on moisture (0-12)
       const wetOffset = id === MaterialId.Dirt ? -(grid.getDirtMoisture(Math.floor(i % grid.width), Math.floor(i / grid.width)) * 5) : 0;
       // Darken bottom edge (where material meets different/empty below)
