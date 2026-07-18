@@ -7,4 +7,5 @@ export * from "./world-state.js";
 export * from "./serialization.js";
 export * from "./random.js";
 export * from "./starter-world.js";
+export * from "./weather-step.js";
 export * from "./gameplay.js";
