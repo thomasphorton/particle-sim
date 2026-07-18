@@ -97,6 +97,16 @@ function inputState(control: keyof CharacterInput): boolean {
   return keys[control] || touchControls[control];
 }
 
+export function getCharacterInputState(): CharacterInput {
+  return {
+    left: inputState("left"),
+    right: inputState("right"),
+    jump: inputState("jump"),
+    crouch: inputState("crouch"),
+    lookUp: inputState("lookUp"),
+  };
+}
+
 export function setTouchControl(control: keyof CharacterInput, pressed: boolean): void {
   touchControls[control] = pressed;
   if (control === "jump" && !pressed) {

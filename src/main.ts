@@ -1,14 +1,14 @@
 import "./style.css";
-import { MATERIALS, MaterialId, createStarterWorld, findFlowerCluster } from "@particle-sim/shared";
+import { MATERIALS, MaterialId, advanceWorldTick, createStarterWorld, findFlowerCluster, normalizePlayerInput, type PlayerInputState } from "@particle-sim/shared";
 import { Renderer } from "./renderer";
-import { step } from "./simulation";
 import { attachInput } from "./input";
 import { buildUi } from "./ui";
 import { state, getActiveHotbarMaterial, getLocalPlayer } from "./state";
-import { createCharacter, attachCharacterInput, updateCharacter, drawCharacter } from "./character";
-import { updateFallingObjects } from "./falling";
+import { createCharacter, attachCharacterInput, getCharacterInputState, drawCharacter } from "./character";
 
 const CELL_SIZE = 5;
+const TICK_MS = 1000 / 60;
+const MAX_TICKS_PER_FRAME = 8;
 
 state.world = createStarterWorld({ roomId: "room_default" });
 const grid = state.world.grid;
@@ -25,18 +25,48 @@ state.character = runtime;
 attachCharacterInput();
 
 let lastTime = performance.now();
+let accumulatorMs = 0;
+let wasPaused = state.world.paused;
+let hidden = document.hidden;
+
+function getBufferedInputs(): Record<string, PlayerInputState> {
+  const localInput = getCharacterInputState();
+  return {
+    [state.localPlayerId]: normalizePlayerInput({
+      left: localInput.left,
+      right: localInput.right,
+      jumpHeld: localInput.jump,
+      crouchHeld: localInput.crouch,
+      lookUpHeld: localInput.lookUp,
+      mineHeld: runtime.swingHeld,
+    }),
+  };
+}
 
 function loop(): void {
   const now = performance.now();
-  const dt = (now - lastTime) / 1000; // seconds
+  const frameDeltaMs = now - lastTime;
   lastTime = now;
 
-  if (!state.world.paused) {
-    state.world.time.dayNightCycle += dt / 300;
-    step(state.world);
-    updateCharacter(getLocalPlayer(), runtime, grid, dt);
-    updateFallingObjects(state.world, dt);
+  const paused = state.world.paused;
+  if (paused !== wasPaused) {
+    lastTime = now;
+    wasPaused = paused;
   }
+
+  if (hidden || paused) {
+    accumulatorMs = 0;
+  } else {
+    accumulatorMs += frameDeltaMs;
+  }
+
+  let ticksThisFrame = 0;
+  while (accumulatorMs >= TICK_MS && ticksThisFrame < MAX_TICKS_PER_FRAME) {
+    advanceWorldTick(state.world, getBufferedInputs());
+    accumulatorMs -= TICK_MS;
+    ticksThisFrame += 1;
+  }
+
   renderer.draw(grid);
   drawCharacter(renderer.getCtx(), getLocalPlayer(), runtime, CELL_SIZE);
 
@@ -126,4 +156,14 @@ function loop(): void {
 
   requestAnimationFrame(loop);
 }
+
+function updateVisibility(): void {
+  hidden = document.hidden;
+  if (!hidden) {
+    lastTime = performance.now();
+    accumulatorMs = 0;
+  }
+}
+
+document.addEventListener("visibilitychange", updateVisibility);
 requestAnimationFrame(loop);

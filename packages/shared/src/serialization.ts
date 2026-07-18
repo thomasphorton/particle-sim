@@ -4,8 +4,9 @@ import { parseObjectId, parsePlayerId, parseRoomId } from "./ids.js";
 import { MATERIALS, MaterialId } from "./materials.js";
 import { createDefaultFallingObjectState, createDefaultPlayerState, createDefaultWeatherState, createDefaultWorldState, type FallingObjectState, type PlayerState, type WeatherState, type WorldState } from "./world-state.js";
 import { createGameplayRandomState, type GameplayRandomState } from "./random.js";
+import { DAY_NIGHT_CYCLE_TICKS } from "./gameplay.js";
 
-export const WORLD_STATE_SCHEMA_VERSION = 2;
+export const WORLD_STATE_SCHEMA_VERSION = 3;
 
 export interface GameplayRandomStateDto {
   algorithm: "mulberry32-v1";
@@ -33,6 +34,10 @@ export interface PlayerStateDto {
   grounded: boolean;
   facing: -1 | 1;
   airTime: number;
+  airTicks: number;
+  previousJumpHeld: boolean;
+  swingElapsedTicks: number | null;
+  faucetCooldownUntilTick: number;
   crouching: boolean;
   lookingUp: boolean;
   swimming: boolean;
@@ -66,14 +71,15 @@ export interface WeatherStateDto {
 }
 
 export interface WorldStateDto {
-  schemaVersion: 2;
+  schemaVersion: 3;
   roomId: string;
   grid: GridDto;
   random: GameplayRandomStateDto;
   players: Record<string, PlayerStateDto>;
   fallingObjects: Record<string, FallingObjectStateDto>;
   paused: boolean;
-  time: { dayNightCycle: number };
+  tick: number;
+  time: { dayNightCycle: number; dayNightTick: number };
   weather: WeatherStateDto;
   nextPlayerOrdinal: number;
   nextObjectOrdinal: number;
@@ -81,6 +87,10 @@ export interface WorldStateDto {
 
 const MAX_GRID_CELLS = 1_000_000;
 const DEFAULT_RANDOM_SEED = 0;
+
+function normalizeDayNightTick(dayNightCycle: number): number {
+  return ((Math.round(dayNightCycle * DAY_NIGHT_CYCLE_TICKS) % DAY_NIGHT_CYCLE_TICKS) + DAY_NIGHT_CYCLE_TICKS) % DAY_NIGHT_CYCLE_TICKS;
+}
 
 function assertFiniteNumber(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -200,7 +210,23 @@ function validatePlayerState(value: unknown): PlayerState {
   const facing = requireField(obj, "facing", "player.facing");
   if (facing !== -1 && facing !== 1) throw new TypeError("player.facing must be -1 or 1");
   player.facing = facing as -1 | 1;
-  player.airTime = assertFiniteNumber(requireField(obj, "airTime", "player.airTime"), "player.airTime");
+  const legacyAirTime = assertFiniteNumber(requireField(obj, "airTime", "player.airTime"), "player.airTime");
+  player.airTime = Math.max(0, Math.round(legacyAirTime));
+  if (Object.prototype.hasOwnProperty.call(obj, "airTicks")) {
+    player.airTicks = assertInteger(obj["airTicks"], "player.airTicks", 0, 1000000);
+  } else {
+    player.airTicks = Math.max(0, Math.round(legacyAirTime));
+  }
+  if (Object.prototype.hasOwnProperty.call(obj, "previousJumpHeld")) {
+    player.previousJumpHeld = assertBoolean(obj["previousJumpHeld"], "player.previousJumpHeld");
+  }
+  if (Object.prototype.hasOwnProperty.call(obj, "swingElapsedTicks")) {
+    const swingElapsedTicks = obj["swingElapsedTicks"];
+    player.swingElapsedTicks = swingElapsedTicks === null ? null : assertInteger(swingElapsedTicks, "player.swingElapsedTicks", 0, 1000000);
+  }
+  if (Object.prototype.hasOwnProperty.call(obj, "faucetCooldownUntilTick")) {
+    player.faucetCooldownUntilTick = assertInteger(obj["faucetCooldownUntilTick"], "player.faucetCooldownUntilTick", 0, 1000000);
+  }
   player.crouching = assertBoolean(requireField(obj, "crouching", "player.crouching"), "player.crouching");
   player.lookingUp = assertBoolean(requireField(obj, "lookingUp", "player.lookingUp"), "player.lookingUp");
   player.swimming = assertBoolean(requireField(obj, "swimming", "player.swimming"), "player.swimming");
@@ -359,7 +385,8 @@ export function serializeWorldState(world: WorldState): WorldStateDto {
     players: Object.fromEntries(Object.entries(world.players).sort(([left], [right]) => compareStringCodeUnits(left, right)).map(([key, value]) => [key, serializePlayerState(value)])),
     fallingObjects: Object.fromEntries(Object.entries(world.fallingObjects).sort(([left], [right]) => compareStringCodeUnits(left, right)).map(([key, value]) => [key, serializeFallingObjectState(value)])),
     paused: world.paused,
-    time: { dayNightCycle: world.time.dayNightCycle },
+    tick: world.tick,
+    time: { dayNightCycle: world.time.dayNightCycle, dayNightTick: world.time.dayNightTick },
     weather: serializeWeatherState(world.weather),
     nextPlayerOrdinal: world.nextPlayerOrdinal,
     nextObjectOrdinal: world.nextObjectOrdinal,
@@ -377,7 +404,11 @@ export function serializePlayerState(player: PlayerState): PlayerStateDto {
     height: player.height,
     grounded: player.grounded,
     facing: player.facing,
-    airTime: player.airTime,
+    airTime: typeof player.airTime === "number" ? player.airTime : 0,
+    airTicks: typeof player.airTicks === "number" ? player.airTicks : (typeof player.airTime === "number" ? Math.max(0, Math.round(player.airTime)) : 0),
+    previousJumpHeld: typeof player.previousJumpHeld === "boolean" ? player.previousJumpHeld : false,
+    swingElapsedTicks: typeof player.swingElapsedTicks === "number" || player.swingElapsedTicks === null ? player.swingElapsedTicks : null,
+    faucetCooldownUntilTick: typeof player.faucetCooldownUntilTick === "number" ? player.faucetCooldownUntilTick : 0,
     crouching: player.crouching,
     lookingUp: player.lookingUp,
     swimming: player.swimming,
@@ -443,7 +474,7 @@ export function deserializeWorldState(input: unknown): WorldState {
     }
   }
   const version = requireField(obj, "schemaVersion", "schemaVersion");
-  if (version !== 1 && version !== WORLD_STATE_SCHEMA_VERSION) {
+  if (version !== 1 && version !== 2 && version !== WORLD_STATE_SCHEMA_VERSION) {
     throw new TypeError("unsupported world state schema version");
   }
 
@@ -475,6 +506,15 @@ export function deserializeWorldState(input: unknown): WorldState {
     throw new TypeError("time.dayNightCycle is required");
   }
   world.time.dayNightCycle = assertFiniteNumber(timeObj["dayNightCycle"], "time.dayNightCycle");
+  if (version === 1 || version === 2) {
+    world.tick = 0;
+    world.time.dayNightTick = normalizeDayNightTick(world.time.dayNightCycle);
+  } else {
+    world.tick = assertInteger(requireField(obj, "tick", "tick"), "tick", 0, 1000000000);
+    world.time.dayNightTick = Object.prototype.hasOwnProperty.call(timeObj, "dayNightTick")
+      ? assertInteger(timeObj["dayNightTick"], "time.dayNightTick", 0, DAY_NIGHT_CYCLE_TICKS - 1)
+      : normalizeDayNightTick(world.time.dayNightCycle);
+  }
   world.weather = validateWeatherState(requireField(obj, "weather", "weather"));
   world.nextPlayerOrdinal = assertInteger(requireField(obj, "nextPlayerOrdinal", "nextPlayerOrdinal"), "nextPlayerOrdinal", 1, 1000000);
   world.nextObjectOrdinal = assertInteger(requireField(obj, "nextObjectOrdinal", "nextObjectOrdinal"), "nextObjectOrdinal", 1, 1000000);
