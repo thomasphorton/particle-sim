@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { Grid, createDefaultFallingObjectState, createDefaultWorldState, createObjectId, deserializeWorldState, harvestFlowerCluster, MaterialId, serializeWorldState } from "@particle-sim/shared";
+import { Grid, createDefaultFallingObjectState, createDefaultWorldState, createGameplayRandomState, createObjectId, deserializeWorldState, harvestFlowerCluster, MaterialId, serializeWorldState } from "@particle-sim/shared";
 import { updateFallingObjects } from "./falling";
 import { mineCellAt } from "./character";
 import { placeHotbarMaterialAt } from "./input";
+import { step } from "./simulation";
 import { getLocalPlayer, state } from "./state";
 
 describe("game logic", () => {
@@ -24,6 +25,22 @@ describe("game logic", () => {
       { kind: "empty" },
     ];
     player.activeHotbarSlot = 0;
+  });
+
+  it("keeps same-seed steps deterministic across serialization", () => {
+    const original = createDefaultWorldState();
+    original.random = createGameplayRandomState(12345);
+
+    const restored = createDefaultWorldState();
+    restored.random = createGameplayRandomState(12345);
+
+    for (let i = 0; i < 20; i += 1) {
+      step(original);
+      step(restored);
+    }
+
+    expect(serializeWorldState(original)).toEqual(serializeWorldState(restored));
+    expect(original.random).toEqual(restored.random);
   });
 
   it("harvests a connected flower cluster and clears the cells", () => {

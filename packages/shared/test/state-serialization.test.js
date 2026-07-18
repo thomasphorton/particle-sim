@@ -4,7 +4,7 @@ import { FLOWER_PALETTE, Grid, MaterialId, allocateObjectId, allocatePlayerId, c
 
 function createValidWorldDto(overrides = {}) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     roomId: "room_test",
     grid: {
       width: 4,
@@ -19,6 +19,7 @@ function createValidWorldDto(overrides = {}) {
     paused: false,
     time: { dayNightCycle: 0.25 },
     weather: { kind: "clear", episodeElapsed: 0, episodeDuration: 0, wind: 0, visualTime: 0, rainAccumulator: 0, lightningFlash: null, lightningCooldown: null, boltX: null, boltY: null, boltSeed: 0 },
+    random: { algorithm: "mulberry32-v1", seed: 0, state: 0 },
     nextPlayerOrdinal: 1,
     nextObjectOrdinal: 1,
     ...overrides,
@@ -100,6 +101,7 @@ test("allocation after restore never reuses an ID", () => {
     paused: false,
     time: { dayNightCycle: 0.25 },
     weather: { kind: "clear", episodeElapsed: 0, episodeDuration: 0, wind: 0, visualTime: 0, rainAccumulator: 0, lightningFlash: null, lightningCooldown: null, boltX: null, boltY: null, boltSeed: 0 },
+    random: { algorithm: "mulberry32-v1", seed: 0, state: 0 },
     nextPlayerOrdinal: 3,
     nextObjectOrdinal: 3,
   };
@@ -198,6 +200,6 @@ test("restored allocation skips IDs already in players, falling objects, and mem
 });
 
 test("rejects malformed schema and dangling object identities", () => {
-  assert.throws(() => deserializeWorldState({ schemaVersion: 2, roomId: "room_bad", grid: { width: 2, height: 2, ids: [0, 0, 0, 0], shade: [0, 0, 0, 0], auxiliary: [0, 0, 0, 0], objectMembership: [] }, players: {}, fallingObjects: {}, paused: false, time: { dayNightCycle: 0.5 }, weather: { kind: "clear", episodeElapsed: 0, episodeDuration: 0, wind: 0, visualTime: 0, rainAccumulator: 0, lightningFlash: null, lightningCooldown: null, boltX: null, boltY: null, boltSeed: 0 }, nextPlayerOrdinal: 1, nextObjectOrdinal: 1 }), /unsupported/);
+  assert.throws(() => deserializeWorldState({ schemaVersion: 3, roomId: "room_bad", grid: { width: 2, height: 2, ids: [0, 0, 0, 0], shade: [0, 0, 0, 0], auxiliary: [0, 0, 0, 0], objectMembership: [] }, players: {}, fallingObjects: {}, paused: false, time: { dayNightCycle: 0.5 }, weather: { kind: "clear", episodeElapsed: 0, episodeDuration: 0, wind: 0, visualTime: 0, rainAccumulator: 0, lightningFlash: null, lightningCooldown: null, boltX: null, boltY: null, boltSeed: 0 }, random: { algorithm: "mulberry32-v1", seed: 0, state: 0 }, nextPlayerOrdinal: 1, nextObjectOrdinal: 1 }), /unsupported/);
   assert.throws(() => deserializeWorldState({ schemaVersion: 1, roomId: "room_bad", grid: { width: 2, height: 2, ids: [0, 0, 0, 0], shade: [0, 0, 0, 0], auxiliary: [0, 0, 0, 0], objectMembership: [{ x: 0, y: 0, objectId: "bad_id" }] }, players: {}, fallingObjects: {}, paused: false, time: { dayNightCycle: 0.5 }, weather: { kind: "clear", episodeElapsed: 0, episodeDuration: 0, wind: 0, visualTime: 0, rainAccumulator: 0, lightningFlash: null, lightningCooldown: null, boltX: null, boltY: null, boltSeed: 0 }, nextPlayerOrdinal: 1, nextObjectOrdinal: 1 }), /object/i);
 });

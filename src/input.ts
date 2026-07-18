@@ -1,4 +1,4 @@
-import { Grid, MATERIALS, MaterialId, allocateObjectId, createDefaultFallingObjectState, harvestFlowerCluster, type WorldState } from "@particle-sim/shared";
+import { Grid, MATERIALS, MaterialId, allocateObjectId, createDefaultFallingObjectState, harvestFlowerCluster, nextBool, placeWorldCell, type WorldState } from "@particle-sim/shared";
 import { state, hasPickaxeEquipped, addToHotbar, getActiveHotbarMaterial, removeFromActiveSlot, getLocalPlayer } from "./state";
 import { startSwing, setSwingHeld } from "./character";
 
@@ -108,7 +108,7 @@ export function placeHotbarMaterialAt(world: WorldState, gx: number, gy: number)
       const x = gx + dx;
       const y = gy + dy;
       if (!grid.inBounds(x, y)) continue;
-      grid.set(x, y, materialId, { objectId });
+      placeWorldCell(world, x, y, materialId, { objectId });
       if (materialId === MaterialId.Faucet) grid.setFaucetFlow(x, y, 1);
     }
     return true;
@@ -126,7 +126,7 @@ export function placeHotbarMaterialAt(world: WorldState, gx: number, gy: number)
       if (!withinPlacementRange(x, y)) continue;
       if (!canPlaceOver(grid, x, y, materialId)) continue;
       if (!removeFromActiveSlot()) return placed;
-      grid.set(x, y, materialId);
+      placeWorldCell(world, x, y, materialId);
       placed = true;
     }
   }
@@ -171,7 +171,7 @@ export function attachInput(canvas: HTMLCanvasElement, world: WorldState, cellSi
         if (!grid.inBounds(x, y)) continue;
         if (!withinPlacementRange(x, y)) continue;
         if (canPlaceOver(x, y, material)) {
-          grid.set(x, y, material);
+          placeWorldCell(world, x, y, material);
         }
       }
     }
@@ -204,7 +204,7 @@ export function attachInput(canvas: HTMLCanvasElement, world: WorldState, cellSi
     for (const [dx, dy] of offsets) {
       const x = gx + dx;
       const y = gy + dy;
-      grid.set(x, y, materialId, { objectId });
+      placeWorldCell(world, x, y, materialId, { objectId });
       // Faucets start on low flow
       if (materialId === MaterialId.Faucet) {
         grid.setFaucetFlow(x, y, 1);
@@ -254,7 +254,7 @@ export function attachInput(canvas: HTMLCanvasElement, world: WorldState, cellSi
       // Add seeds to hotbar (1 per bloom + 10% chance of bonus seed)
       for (let i = 0; i < harvested; i++) {
         addToHotbar(MaterialId.Seed);
-        if (Math.random() < 0.1) addToHotbar(MaterialId.Seed);
+        if (nextBool(world.random, 0.1)) addToHotbar(MaterialId.Seed);
       }
       if (state.hoverPixel) {
         state.snip = { px: state.hoverPixel.x, py: state.hoverPixel.y, startTime: performance.now() };
