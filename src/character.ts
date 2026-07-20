@@ -1,6 +1,8 @@
 import { SWING_DURATION_TICKS, type Grid, type PlayerId, type PlayerState } from "@particle-sim/shared";
-import { setInputEdgeBufferHeld, type InputEdgeBuffer } from "./input-buffer";
+import type { InputEdgeBuffer } from "./input-buffer";
 import { getLocalPlayer } from "./state";
+
+let inputBuffer: InputEdgeBuffer | null = null;
 
 export interface CharacterRuntime {
   playerId: PlayerId;
@@ -15,11 +17,53 @@ export interface CharacterInput {
   mine: boolean;
 }
 
-const keys: CharacterInput = { left: false, right: false, jump: false, crouch: false, lookUp: false, mine: false };
+const keyboardControls: CharacterInput = { left: false, right: false, jump: false, crouch: false, lookUp: false, mine: false };
 const touchControls: CharacterInput = { left: false, right: false, jump: false, crouch: false, lookUp: false, mine: false };
+let pointerMineHeld = false;
 
 function inputState(control: keyof CharacterInput): boolean {
-  return keys[control] || touchControls[control];
+  if (control === "mine") {
+    return keyboardControls.mine || touchControls.mine || pointerMineHeld;
+  }
+  return keyboardControls[control] || touchControls[control];
+}
+
+function syncInputBuffer(control: "jump" | "mine"): void {
+  if (!inputBuffer) return;
+  if (control === "jump") {
+    const aggregatePressed = keyboardControls.jump || touchControls.jump;
+    if (aggregatePressed && !inputBuffer.heldJump) {
+      inputBuffer.latchedJump = true;
+    }
+    inputBuffer.heldJump = aggregatePressed;
+    return;
+  }
+
+  const aggregatePressed = keyboardControls.mine || touchControls.mine || pointerMineHeld;
+  if (aggregatePressed && !inputBuffer.heldMine) {
+    inputBuffer.latchedMine = true;
+  }
+  inputBuffer.heldMine = aggregatePressed;
+}
+
+export function setKeyboardControl(control: keyof CharacterInput, pressed: boolean): void {
+  keyboardControls[control] = pressed;
+  if (control === "jump" || control === "mine") {
+    syncInputBuffer(control);
+  }
+}
+
+export function setTouchControl(control: keyof CharacterInput, pressed: boolean): void {
+  touchControls[control] = pressed;
+  if (control === "jump" || control === "mine") {
+    syncInputBuffer(control);
+  }
+}
+
+export function setPointerControl(control: keyof CharacterInput, pressed: boolean): void {
+  if (control !== "mine") return;
+  pointerMineHeld = pressed;
+  syncInputBuffer("mine");
 }
 
 export function createCharacter(grid: Grid): CharacterRuntime {
@@ -55,10 +99,6 @@ export function getCharacterInputState(): CharacterInput {
   };
 }
 
-export function setTouchControl(control: keyof CharacterInput, pressed: boolean): void {
-  touchControls[control] = pressed;
-}
-
 function isEditable(target: EventTarget | null): boolean {
   if (!target || !(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
@@ -66,14 +106,9 @@ function isEditable(target: EventTarget | null): boolean {
 }
 
 export function attachCharacterInput(buffer: InputEdgeBuffer): void {
+  inputBuffer = buffer;
   const setHeld = (control: keyof CharacterInput, pressed: boolean): void => {
-    keys[control] = pressed;
-    if (control === "jump") {
-      setInputEdgeBufferHeld(buffer, "jump", pressed);
-    }
-    if (control === "mine") {
-      setInputEdgeBufferHeld(buffer, "mine", pressed);
-    }
+    setKeyboardControl(control, pressed);
   };
 
   window.addEventListener("keydown", (e) => {
@@ -116,25 +151,25 @@ export function attachCharacterInput(buffer: InputEdgeBuffer): void {
   });
   window.addEventListener("mousedown", (e) => {
     if (e.button === 0) {
-      setHeld("mine", true);
+      setPointerControl("mine", true);
       e.preventDefault();
     }
   });
   window.addEventListener("mouseup", (e) => {
     if (e.button === 0) {
-      setHeld("mine", false);
+      setPointerControl("mine", false);
       e.preventDefault();
     }
   });
   window.addEventListener("pointerdown", (e) => {
     if (e.button === 0 || e.pointerType === "touch") {
-      setHeld("mine", true);
+      setPointerControl("mine", true);
       e.preventDefault();
     }
   });
   window.addEventListener("pointerup", (e) => {
     if (e.button === 0 || e.pointerType === "touch") {
-      setHeld("mine", false);
+      setPointerControl("mine", false);
       e.preventDefault();
     }
   });
