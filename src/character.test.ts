@@ -1,72 +1,77 @@
 /** @vitest-environment jsdom */
 import { beforeEach, describe, expect, it } from "vitest";
-import { attachCharacterInput, getCharacterInputState, setKeyboardControl, setPointerControl, setTouchControl } from "./character";
+import { attachCharacterInput, getCharacterInputState, resetCharacterInputState } from "./character";
 import { consumeBufferedInputs, createInputEdgeBuffer, type InputEdgeBuffer } from "./input-buffer";
 
-function resetInputs(buffer: InputEdgeBuffer): void {
-  setKeyboardControl("jump", false);
-  setKeyboardControl("mine", false);
-  setTouchControl("jump", false);
-  setTouchControl("mine", false);
-  setPointerControl("mine", false);
-  consumeBufferedInputs(buffer);
+function dispatchMouseEvent(type: "mousedown" | "mouseup"): void {
+  window.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0 }));
 }
 
-describe("character input aggregation", () => {
+function dispatchPointerEvent(type: "pointerdown" | "pointerup" | "pointercancel", options: { pointerId?: number; pointerType?: string; button?: number } = {}): void {
+  const event = new Event(type, { bubbles: true, cancelable: true }) as Event & { pointerId: number; pointerType: string; button: number };
+  Object.defineProperties(event, {
+    pointerId: { configurable: true, value: options.pointerId ?? 0 },
+    pointerType: { configurable: true, value: options.pointerType ?? "mouse" },
+    button: { configurable: true, value: options.button ?? 0 },
+  });
+  window.dispatchEvent(event);
+}
+
+describe("character mine input aggregation", () => {
   let buffer: InputEdgeBuffer;
 
   beforeEach(() => {
     buffer = createInputEdgeBuffer();
     attachCharacterInput(buffer);
-    resetInputs(buffer);
+    resetCharacterInputState();
   });
 
-  it("keeps jump true while one mixed-source release leaves the other held", () => {
-    setKeyboardControl("jump", true);
-    setTouchControl("jump", true);
-    setTouchControl("jump", false);
-
-    expect(getCharacterInputState().jump).toBe(true);
-
-    setKeyboardControl("jump", false);
-    expect(getCharacterInputState().jump).toBe(false);
-  });
-
-  it("keeps jump true when the source order is reversed", () => {
-    setTouchControl("jump", true);
-    setKeyboardControl("jump", true);
-    setKeyboardControl("jump", false);
-
-    expect(getCharacterInputState().jump).toBe(true);
-
-    setTouchControl("jump", false);
-    expect(getCharacterInputState().jump).toBe(false);
-  });
-
-  it("emits exactly one consumed tick for a fast touch tap", () => {
-    setTouchControl("jump", true);
-    setTouchControl("jump", false);
-
-    expect(consumeBufferedInputs(buffer).jumpHeld).toBe(true);
-    expect(consumeBufferedInputs(buffer).jumpHeld).toBe(false);
-  });
-
-  it("keeps held touch jump true across multiple ticks", () => {
-    setTouchControl("jump", true);
-
-    expect(consumeBufferedInputs(buffer).jumpHeld).toBe(true);
-    expect(consumeBufferedInputs(buffer).jumpHeld).toBe(true);
-    expect(consumeBufferedInputs(buffer).jumpHeld).toBe(true);
-  });
-
-  it("keeps mine true while touch and pointer overlap and only releases when all sources are cleared", () => {
-    setTouchControl("mine", true);
-    setPointerControl("mine", true);
-    setTouchControl("mine", false);
+  it("keeps mine true after mouse release while touch remains held", () => {
+    dispatchMouseEvent("mousedown");
+    dispatchPointerEvent("pointerdown", { pointerId: 2, pointerType: "touch" });
+    dispatchMouseEvent("mouseup");
 
     expect(getCharacterInputState().mine).toBe(true);
 
-    setPointerControl("mine", false);
+    dispatchPointerEvent("pointerup", { pointerId: 2, pointerType: "touch" });
     expect(getCharacterInputState().mine).toBe(false);
+  });
+
+  it("keeps mine true when touch and mouse are added in reverse order", () => {
+    dispatchPointerEvent("pointerdown", { pointerId: 3, pointerType: "touch" });
+    dispatchMouseEvent("mousedown");
+    dispatchPointerEvent("pointerup", { pointerId: 3, pointerType: "touch" });
+
+    expect(getCharacterInputState().mine).toBe(true);
+
+    dispatchMouseEvent("mouseup");
+    expect(getCharacterInputState().mine).toBe(false);
+  });
+
+  it("keeps mine true while one of two simultaneous touch pointers remains active", () => {
+    dispatchPointerEvent("pointerdown", { pointerId: 4, pointerType: "touch" });
+    dispatchPointerEvent("pointerdown", { pointerId: 5, pointerType: "touch" });
+    dispatchPointerEvent("pointerup", { pointerId: 4, pointerType: "touch" });
+
+    expect(getCharacterInputState().mine).toBe(true);
+
+    dispatchPointerEvent("pointercancel", { pointerId: 5, pointerType: "touch" });
+    expect(getCharacterInputState().mine).toBe(false);
+  });
+
+  it("clears the final touch pointer on pointercancel", () => {
+    dispatchPointerEvent("pointerdown", { pointerId: 6, pointerType: "touch" });
+    expect(getCharacterInputState().mine).toBe(true);
+
+    dispatchPointerEvent("pointercancel", { pointerId: 6, pointerType: "touch" });
+    expect(getCharacterInputState().mine).toBe(false);
+  });
+
+  it("emits exactly one consumed mine edge for a fast touch tap", () => {
+    dispatchPointerEvent("pointerdown", { pointerId: 7, pointerType: "touch" });
+    dispatchPointerEvent("pointerup", { pointerId: 7, pointerType: "touch" });
+
+    expect(consumeBufferedInputs(buffer).mineHeld).toBe(true);
+    expect(consumeBufferedInputs(buffer).mineHeld).toBe(false);
   });
 });

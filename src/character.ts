@@ -3,6 +3,7 @@ import type { InputEdgeBuffer } from "./input-buffer";
 import { getLocalPlayer } from "./state";
 
 let inputBuffer: InputEdgeBuffer | null = null;
+let characterInputAttached = false;
 
 export interface CharacterRuntime {
   playerId: PlayerId;
@@ -19,11 +20,13 @@ export interface CharacterInput {
 
 const keyboardControls: CharacterInput = { left: false, right: false, jump: false, crouch: false, lookUp: false, mine: false };
 const touchControls: CharacterInput = { left: false, right: false, jump: false, crouch: false, lookUp: false, mine: false };
-let pointerMineHeld = false;
+let mouseMineHeld = false;
+let penMineHeld = false;
+const touchMinePointers = new Set<number>();
 
 function inputState(control: keyof CharacterInput): boolean {
   if (control === "mine") {
-    return keyboardControls.mine || touchControls.mine || pointerMineHeld;
+    return keyboardControls.mine || touchControls.mine || mouseMineHeld || penMineHeld || touchMinePointers.size > 0;
   }
   return keyboardControls[control] || touchControls[control];
 }
@@ -39,7 +42,7 @@ function syncInputBuffer(control: "jump" | "mine"): void {
     return;
   }
 
-  const aggregatePressed = keyboardControls.mine || touchControls.mine || pointerMineHeld;
+  const aggregatePressed = keyboardControls.mine || touchControls.mine || mouseMineHeld || penMineHeld || touchMinePointers.size > 0;
   if (aggregatePressed && !inputBuffer.heldMine) {
     inputBuffer.latchedMine = true;
   }
@@ -60,9 +63,24 @@ export function setTouchControl(control: keyof CharacterInput, pressed: boolean)
   }
 }
 
+function updateMinePointerSource(pointerType: string, pointerId: number, pressed: boolean): void {
+  if (pointerType === "mouse") {
+    mouseMineHeld = pressed;
+  } else if (pointerType === "pen") {
+    penMineHeld = pressed;
+  } else if (pointerType === "touch") {
+    if (pressed) {
+      touchMinePointers.add(pointerId);
+    } else {
+      touchMinePointers.delete(pointerId);
+    }
+  }
+  syncInputBuffer("mine");
+}
+
 export function setPointerControl(control: keyof CharacterInput, pressed: boolean): void {
   if (control !== "mine") return;
-  pointerMineHeld = pressed;
+  mouseMineHeld = pressed;
   syncInputBuffer("mine");
 }
 
@@ -99,6 +117,30 @@ export function getCharacterInputState(): CharacterInput {
   };
 }
 
+export function resetCharacterInputState(): void {
+  keyboardControls.left = false;
+  keyboardControls.right = false;
+  keyboardControls.jump = false;
+  keyboardControls.crouch = false;
+  keyboardControls.lookUp = false;
+  keyboardControls.mine = false;
+  touchControls.left = false;
+  touchControls.right = false;
+  touchControls.jump = false;
+  touchControls.crouch = false;
+  touchControls.lookUp = false;
+  touchControls.mine = false;
+  mouseMineHeld = false;
+  penMineHeld = false;
+  touchMinePointers.clear();
+  if (inputBuffer) {
+    inputBuffer.heldJump = false;
+    inputBuffer.heldMine = false;
+    inputBuffer.latchedJump = false;
+    inputBuffer.latchedMine = false;
+  }
+}
+
 function isEditable(target: EventTarget | null): boolean {
   if (!target || !(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
@@ -106,6 +148,11 @@ function isEditable(target: EventTarget | null): boolean {
 }
 
 export function attachCharacterInput(buffer: InputEdgeBuffer): void {
+  if (characterInputAttached) {
+    inputBuffer = buffer;
+    return;
+  }
+  characterInputAttached = true;
   inputBuffer = buffer;
   const setHeld = (control: keyof CharacterInput, pressed: boolean): void => {
     setKeyboardControl(control, pressed);
@@ -151,27 +198,34 @@ export function attachCharacterInput(buffer: InputEdgeBuffer): void {
   });
   window.addEventListener("mousedown", (e) => {
     if (e.button === 0) {
-      setPointerControl("mine", true);
+      updateMinePointerSource("mouse", 0, true);
       e.preventDefault();
     }
   });
   window.addEventListener("mouseup", (e) => {
     if (e.button === 0) {
-      setPointerControl("mine", false);
+      updateMinePointerSource("mouse", 0, false);
       e.preventDefault();
     }
   });
   window.addEventListener("pointerdown", (e) => {
-    if (e.button === 0 || e.pointerType === "touch") {
-      setPointerControl("mine", true);
+    if (e.button === 0 || e.pointerType === "touch" || e.pointerType === "pen" || e.pointerType === "mouse") {
+      updateMinePointerSource(e.pointerType || "mouse", e.pointerId, true);
       e.preventDefault();
     }
   });
   window.addEventListener("pointerup", (e) => {
-    if (e.button === 0 || e.pointerType === "touch") {
-      setPointerControl("mine", false);
+    if (e.button === 0 || e.pointerType === "touch" || e.pointerType === "pen" || e.pointerType === "mouse") {
+      updateMinePointerSource(e.pointerType || "mouse", e.pointerId, false);
       e.preventDefault();
     }
+  });
+  window.addEventListener("pointercancel", (e) => {
+    updateMinePointerSource(e.pointerType || "mouse", e.pointerId, false);
+    e.preventDefault();
+  });
+  window.addEventListener("lostpointercapture", (e) => {
+    updateMinePointerSource(e.pointerType || "mouse", e.pointerId, false);
   });
 }
 
