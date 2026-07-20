@@ -22,6 +22,8 @@ const keyboardControls: CharacterInput = { left: false, right: false, jump: fals
 const touchControls: CharacterInput = { left: false, right: false, jump: false, crouch: false, lookUp: false, mine: false };
 let mouseMineHeld = false;
 let penMineHeld = false;
+let mouseMinePointerId: number | null = null;
+let penMinePointerId: number | null = null;
 const touchMinePointers = new Set<number>();
 
 function inputState(control: keyof CharacterInput): boolean {
@@ -65,9 +67,21 @@ export function setTouchControl(control: keyof CharacterInput, pressed: boolean)
 
 function updateMinePointerSource(pointerType: string, pointerId: number, pressed: boolean): void {
   if (pointerType === "mouse") {
-    mouseMineHeld = pressed;
+    if (pressed) {
+      mouseMineHeld = true;
+      mouseMinePointerId = pointerId;
+    } else if (mouseMinePointerId === pointerId) {
+      mouseMineHeld = false;
+      mouseMinePointerId = null;
+    }
   } else if (pointerType === "pen") {
-    penMineHeld = pressed;
+    if (pressed) {
+      penMineHeld = true;
+      penMinePointerId = pointerId;
+    } else if (penMinePointerId === pointerId) {
+      penMineHeld = false;
+      penMinePointerId = null;
+    }
   } else if (pointerType === "touch") {
     if (pressed) {
       touchMinePointers.add(pointerId);
@@ -78,7 +92,7 @@ function updateMinePointerSource(pointerType: string, pointerId: number, pressed
   syncInputBuffer("mine");
 }
 
-function shouldHandleMinePointerEvent(pointerType: string | undefined, button: number | undefined): boolean {
+function shouldStartMinePointerEvent(pointerType: string | undefined, button: number | undefined): boolean {
   const resolvedPointerType = pointerType || "mouse";
   if (resolvedPointerType === "touch") {
     return true;
@@ -92,6 +106,9 @@ function shouldHandleMinePointerEvent(pointerType: string | undefined, button: n
 export function setPointerControl(control: keyof CharacterInput, pressed: boolean): void {
   if (control !== "mine") return;
   mouseMineHeld = pressed;
+  if (!pressed) {
+    mouseMinePointerId = null;
+  }
   syncInputBuffer("mine");
 }
 
@@ -143,6 +160,8 @@ export function resetCharacterInputState(): void {
   touchControls.mine = false;
   mouseMineHeld = false;
   penMineHeld = false;
+  mouseMinePointerId = null;
+  penMinePointerId = null;
   touchMinePointers.clear();
   if (inputBuffer) {
     inputBuffer.heldJump = false;
@@ -220,23 +239,40 @@ export function attachCharacterInput(buffer: InputEdgeBuffer): void {
     }
   });
   window.addEventListener("pointerdown", (e) => {
-    if (!shouldHandleMinePointerEvent(e.pointerType, e.button)) return;
+    if (!shouldStartMinePointerEvent(e.pointerType, e.button)) return;
     updateMinePointerSource(e.pointerType || "mouse", e.pointerId, true);
     e.preventDefault();
   });
   window.addEventListener("pointerup", (e) => {
-    if (!shouldHandleMinePointerEvent(e.pointerType, e.button)) return;
-    updateMinePointerSource(e.pointerType || "mouse", e.pointerId, false);
-    e.preventDefault();
+    if (e.pointerType === "touch") {
+      updateMinePointerSource("touch", e.pointerId, false);
+      e.preventDefault();
+      return;
+    }
+    if (e.pointerType === "mouse" || e.pointerType === "pen") {
+      updateMinePointerSource(e.pointerType, e.pointerId, false);
+      e.preventDefault();
+    }
   });
   window.addEventListener("pointercancel", (e) => {
-    if (!shouldHandleMinePointerEvent(e.pointerType, e.button)) return;
-    updateMinePointerSource(e.pointerType || "mouse", e.pointerId, false);
-    e.preventDefault();
+    if (e.pointerType === "touch") {
+      updateMinePointerSource("touch", e.pointerId, false);
+      e.preventDefault();
+      return;
+    }
+    if (e.pointerType === "mouse" || e.pointerType === "pen") {
+      updateMinePointerSource(e.pointerType, e.pointerId, false);
+      e.preventDefault();
+    }
   });
   window.addEventListener("lostpointercapture", (e) => {
-    if (!shouldHandleMinePointerEvent(e.pointerType, e.button)) return;
-    updateMinePointerSource(e.pointerType || "mouse", e.pointerId, false);
+    if (e.pointerType === "touch") {
+      updateMinePointerSource("touch", e.pointerId, false);
+      return;
+    }
+    if (e.pointerType === "mouse" || e.pointerType === "pen") {
+      updateMinePointerSource(e.pointerType, e.pointerId, false);
+    }
   });
 }
 

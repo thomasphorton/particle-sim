@@ -7,7 +7,7 @@ function dispatchMouseEvent(type: "mousedown" | "mouseup"): void {
   window.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0 }));
 }
 
-function dispatchPointerEvent(type: "pointerdown" | "pointerup" | "pointercancel", options: { pointerId?: number; pointerType?: string; button?: number } = {}): void {
+function dispatchPointerEvent(type: "pointerdown" | "pointerup" | "pointercancel" | "lostpointercapture", options: { pointerId?: number; pointerType?: string; button?: number } = {}): void {
   const event = new Event(type, { bubbles: true, cancelable: true }) as Event & { pointerId: number; pointerType: string; button: number };
   Object.defineProperties(event, {
     pointerId: { configurable: true, value: options.pointerId ?? 0 },
@@ -104,9 +104,37 @@ describe("character mine input aggregation", () => {
     expect(getCharacterInputState().mine).toBe(false);
   });
 
+  it("clears primary mouse mining on pointercancel with button -1", () => {
+    dispatchPointerEvent("pointerdown", { pointerId: 12, pointerType: "mouse", button: 0 });
+    expect(getCharacterInputState().mine).toBe(true);
+
+    dispatchPointerEvent("pointercancel", { pointerId: 12, pointerType: "mouse", button: -1 });
+    expect(getCharacterInputState().mine).toBe(false);
+  });
+
+  it("clears primary pen mining on lostpointercapture with button -1", () => {
+    dispatchPointerEvent("pointerdown", { pointerId: 13, pointerType: "pen", button: 0 });
+    expect(getCharacterInputState().mine).toBe(true);
+
+    dispatchPointerEvent("lostpointercapture", { pointerId: 13, pointerType: "pen", button: -1 });
+    expect(getCharacterInputState().mine).toBe(false);
+  });
+
+  it("keeps touch mining active when mouse or pen cleanup events arrive for another pointer", () => {
+    dispatchPointerEvent("pointerdown", { pointerId: 14, pointerType: "touch" });
+    dispatchPointerEvent("pointerdown", { pointerId: 15, pointerType: "mouse", button: 0 });
+    expect(getCharacterInputState().mine).toBe(true);
+
+    dispatchPointerEvent("pointercancel", { pointerId: 15, pointerType: "mouse", button: -1 });
+    expect(getCharacterInputState().mine).toBe(true);
+
+    dispatchPointerEvent("pointerup", { pointerId: 14, pointerType: "touch" });
+    expect(getCharacterInputState().mine).toBe(false);
+  });
+
   it("emits exactly one consumed mine edge for a fast touch tap", () => {
-    dispatchPointerEvent("pointerdown", { pointerId: 12, pointerType: "touch" });
-    dispatchPointerEvent("pointerup", { pointerId: 12, pointerType: "touch" });
+    dispatchPointerEvent("pointerdown", { pointerId: 16, pointerType: "touch" });
+    dispatchPointerEvent("pointerup", { pointerId: 16, pointerType: "touch" });
 
     expect(consumeBufferedInputs(buffer).mineHeld).toBe(true);
     expect(consumeBufferedInputs(buffer).mineHeld).toBe(false);
