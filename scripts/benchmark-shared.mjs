@@ -177,8 +177,9 @@ function runScenario(name, schedule, options = {}) {
       ensureMeasuredFallingObject(world, substepIndex);
       const fallingBefore = getFallingObjectSnapshot(world);
       const tickIndex = warmupTicks + substepIndex;
+      const inputs = makeInputsForTick(tickIndex);
       const tickStart = process.hrtime.bigint();
-      advanceWorldTick(world, makeInputsForTick(tickIndex));
+      advanceWorldTick(world, inputs);
       const tickEnd = process.hrtime.bigint();
       const fallingAfter = getFallingObjectSnapshot(world);
       if (fallingBefore !== fallingAfter) {
