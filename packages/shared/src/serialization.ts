@@ -450,9 +450,13 @@ function validateCommandLedger(value: unknown): CommandLedgerState {
       commandType: receipt["commandType"] as any,
       code: receipt["code"] as any,
       accepted: assertBoolean(receipt["accepted"], "commandLedger.recent[].accepted"),
-      worldRevision: assertInteger(receipt["worldRevision"], "commandLedger.recent[].worldRevision", 0, MAX_SAFE_INTEGER),
-      inventoryRevision: assertInteger(receipt["inventoryRevision"], "commandLedger.recent[].inventoryRevision", 0, MAX_SAFE_INTEGER),
-      targetRevision: assertInteger(receipt["targetRevision"], "commandLedger.recent[].targetRevision", 0, MAX_SAFE_INTEGER),
+      beforeWorldRevision: assertInteger(receipt["beforeWorldRevision"], "commandLedger.recent[].beforeWorldRevision", 0, MAX_SAFE_INTEGER),
+      afterWorldRevision: assertInteger(receipt["afterWorldRevision"], "commandLedger.recent[].afterWorldRevision", 0, MAX_SAFE_INTEGER),
+      beforeInventoryRevision: assertInteger(receipt["beforeInventoryRevision"], "commandLedger.recent[].beforeInventoryRevision", 0, MAX_SAFE_INTEGER),
+      afterInventoryRevision: assertInteger(receipt["afterInventoryRevision"], "commandLedger.recent[].afterInventoryRevision", 0, MAX_SAFE_INTEGER),
+      beforeTargetRevision: assertInteger(receipt["beforeTargetRevision"], "commandLedger.recent[].beforeTargetRevision", 0, MAX_SAFE_INTEGER),
+      afterTargetRevision: assertInteger(receipt["afterTargetRevision"], "commandLedger.recent[].afterTargetRevision", 0, MAX_SAFE_INTEGER),
+      acceptedEffect: typeof receipt["acceptedEffect"] === "string" || receipt["acceptedEffect"] === null ? receipt["acceptedEffect"] : null,
       fingerprint: receipt["fingerprint"] as string,
     });
   }
