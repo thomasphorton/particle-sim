@@ -174,16 +174,17 @@ function runScenario(name, schedule, options = {}) {
     const frameStart = process.hrtime.bigint();
     for (let substep = 0; substep < schedule.substepsPerFrame; substep += 1) {
       const substepIndex = frame * schedule.substepsPerFrame + substep;
-      const tickStart = process.hrtime.bigint();
       ensureMeasuredFallingObject(world, substepIndex);
       const fallingBefore = getFallingObjectSnapshot(world);
       const tickIndex = warmupTicks + substepIndex;
+      const tickStart = process.hrtime.bigint();
       advanceWorldTick(world, makeInputsForTick(tickIndex));
+      const tickEnd = process.hrtime.bigint();
       const fallingAfter = getFallingObjectSnapshot(world);
       if (fallingBefore !== fallingAfter) {
         fallingUpdates += 1;
       }
-      tickSamplesMs.push(Number(process.hrtime.bigint() - tickStart) / 1e6);
+      tickSamplesMs.push(Number(tickEnd - tickStart) / 1e6);
     }
     frameSamplesMs.push(Number(process.hrtime.bigint() - frameStart) / 1e6);
   }
