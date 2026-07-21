@@ -67,7 +67,6 @@ test("falling-to-placed transition preserves object ID", () => {
   world.fallingObjects[objectId] = { id: objectId, materialId: MaterialId.Torch, x: 3, y: 1, restY: 4, vy: 0, offsets: [[0, 0]] };
   const grid = world.grid;
   grid.set(3, 4, MaterialId.Empty);
-  const targetY = 4;
   const landingCell = grid.getCellForObjectId(objectId);
   assert.equal(landingCell, null);
   grid.set(3, 4, MaterialId.Torch, { objectId });
