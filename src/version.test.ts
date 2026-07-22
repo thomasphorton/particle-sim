@@ -80,4 +80,12 @@ describe("build metadata", () => {
     expect(details.runHref).toBe("https://github.com/octo/particle-sim/actions/runs/4242");
     expect(formatBuildTimestamp(metadata.buildTimestamp)).toBe("2024-01-02 03:04Z");
   });
+
+  it("returns no links for local and partial metadata", () => {
+    const details = getVersionBadgeDetails(createBuildMetadata({}, { buildTimestamp: "2024-01-02T03:04:05.000Z" }));
+
+    expect(details.commitHref).toBeUndefined();
+    expect(details.runHref).toBeUndefined();
+    expect(details.runLabel).toBeUndefined();
+  });
 });

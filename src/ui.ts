@@ -74,8 +74,13 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
   versionBadge.className = "app-version";
   versionBadge.setAttribute("role", "status");
   versionBadge.setAttribute("aria-live", "polite");
-  versionBadge.setAttribute("aria-label", `Build version ${buildMetadata.loadedCodeId}`);
-  versionBadge.title = `Loaded code: ${buildMetadata.loadedCodeId}`;
+  const badgeLabel = [
+    `${versionDetails.sourceLabel} ${versionDetails.commitLabel}`,
+    versionDetails.runLabel,
+    versionDetails.timestamp,
+  ].filter(Boolean).join(" • ");
+  versionBadge.setAttribute("aria-label", `Build version ${badgeLabel}`);
+  versionBadge.title = `Build version ${badgeLabel}`;
 
   const sourceLabel = document.createElement("span");
   sourceLabel.textContent = `${versionDetails.sourceLabel} `;
