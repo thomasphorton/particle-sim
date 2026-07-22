@@ -493,7 +493,8 @@ function parseEnvelope(value: unknown): CommandEnvelope | null {
   }
 }
 
-function getTargetRevision(grid: Grid, x: number, y: number): number {
+function getTargetRevision(grid: Grid, x: number, y: number): number | null {
+  if (!grid.inBounds(x, y)) return null;
   const index = grid.index(x, y);
   return grid.cellRevisions[index] ?? 0;
 }
@@ -613,6 +614,9 @@ function buildPlacementPlan(world: WorldState, actor: PlayerState, commandId: Co
   }
   if (command.expectedInventoryRevision !== actor.inventoryRevision) {
     return { gridWrites: [], fallingObjects: [], inventoryRevisionDelta: 0, worldRevisionDelta: 0, acceptedEffect: null, resultCode: "revision" };
+  }
+  if (!world.grid.inBounds(command.x, command.y)) {
+    return { gridWrites: [], fallingObjects: [], inventoryRevisionDelta: 0, worldRevisionDelta: 0, acceptedEffect: null, resultCode: "bounds" };
   }
   const anchorIndex = world.grid.index(command.x, command.y);
   if (command.expectedAnchorRevision !== (world.grid.cellRevisions[anchorIndex] ?? 0)) {
@@ -850,6 +854,10 @@ export function validateCommand(world: WorldState, envelopeInput: unknown): Vali
       break;
     }
     case "harvest": {
+      if (!world.grid.inBounds(envelope.command.x, envelope.command.y)) {
+        resultCode = "bounds";
+        break;
+      }
       const index = world.grid.index(envelope.command.x, envelope.command.y);
       if (envelope.command.expectedTargetRevision !== (world.grid.cellRevisions[index] ?? 0)) {
         resultCode = "revision";
@@ -871,36 +879,36 @@ export function validateCommand(world: WorldState, envelopeInput: unknown): Vali
       break;
     }
     case "cycle_faucet": {
+      if (!world.grid.inBounds(envelope.command.x, envelope.command.y)) {
+        resultCode = "bounds";
+        break;
+      }
       const cell = world.grid.get(envelope.command.x, envelope.command.y);
       if (cell !== MaterialId.Faucet) {
         resultCode = "target";
         break;
       }
       const faucetObjectId = world.grid.getObjectId(envelope.command.x, envelope.command.y);
-      if (envelope.command.objectId !== faucetObjectId) {
+      if (!faucetObjectId || envelope.command.objectId !== faucetObjectId) {
         resultCode = "target";
         break;
       }
       const revision = getTargetRevision(world.grid, envelope.command.x, envelope.command.y);
-      if (envelope.command.expectedTargetRevision !== revision) {
-        resultCode = "revision";
+      if (revision === null || envelope.command.expectedTargetRevision !== revision) {
+        resultCode = revision === null ? "bounds" : "revision";
         break;
       }
       const nextAux = (world.grid.getAuxiliaryValue(envelope.command.x, envelope.command.y) + 1) % 3;
-      gridWrites = [];
-      for (let y = 0; y < world.grid.height; y++) {
-        for (let x = 0; x < world.grid.width; x++) {
-          if (world.grid.getObjectId(x, y) !== faucetObjectId) continue;
-          gridWrites.push({
-            x,
-            y,
-            id: MaterialId.Faucet,
-            shade: world.grid.shade[world.grid.index(x, y)] ?? 0,
-            auxiliary: nextAux,
-            objectId: faucetObjectId
-          });
-        }
-      }
+      gridWrites = world.grid.getObjectCells(faucetObjectId)
+        .filter(([x, y]) => world.grid.get(x, y) === MaterialId.Faucet && world.grid.getObjectId(x, y) === faucetObjectId)
+        .map(([x, y]) => ({
+          x,
+          y,
+          id: MaterialId.Faucet,
+          shade: world.grid.shade[world.grid.index(x, y)] ?? 0,
+          auxiliary: nextAux,
+          objectId: faucetObjectId,
+        }));
       acceptedEffect = "target";
       worldRevisionDelta = 1;
       break;
