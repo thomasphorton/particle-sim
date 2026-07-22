@@ -1,6 +1,7 @@
 import { Grid, MATERIALS, MaterialId, createCommandEnvelope, enqueueCommand, getNextActorSequence, type HotbarItem } from "@particle-sim/shared";
 import { getLocalPlayer, setDayNightPreset, state } from "./state";
 import { setTouchControl } from "./character";
+import { buildMetadata, getVersionBadgeDetails } from "./version";
 
 const PALETTE: MaterialId[] = [
   MaterialId.Sand,
@@ -67,6 +68,65 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
 
   const actionGroup = document.createElement("div");
   actionGroup.className = "action-group";
+
+  const versionDetails = getVersionBadgeDetails(buildMetadata);
+  const versionBadge = document.createElement("div");
+  versionBadge.className = "app-version";
+  versionBadge.setAttribute("role", "status");
+  versionBadge.setAttribute("aria-live", "polite");
+  const badgeLabel = [
+    `${versionDetails.sourceLabel} ${versionDetails.commitLabel}`,
+    versionDetails.runLabel,
+    versionDetails.timestamp,
+  ].filter(Boolean).join(" • ");
+  versionBadge.setAttribute("aria-label", `Build version ${badgeLabel}`);
+  versionBadge.title = `Build version ${badgeLabel} • ${buildMetadata.loadedCodeId}`;
+
+  const sourceLabel = document.createElement("span");
+  sourceLabel.textContent = `${versionDetails.sourceLabel} `;
+  versionBadge.appendChild(sourceLabel);
+
+  const commitNode = versionDetails.commitHref
+    ? (() => {
+      const link = document.createElement("a");
+      link.href = versionDetails.commitHref;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = versionDetails.commitLabel;
+      return link;
+    })()
+    : (() => {
+      const text = document.createElement("span");
+      text.textContent = versionDetails.commitLabel;
+      return text;
+    })();
+  versionBadge.appendChild(commitNode);
+
+  if (versionDetails.runLabel) {
+    const runPrefix = document.createElement("span");
+    runPrefix.textContent = " • ";
+    versionBadge.appendChild(runPrefix);
+
+    const runNode = versionDetails.runHref
+      ? (() => {
+        const link = document.createElement("a");
+        link.href = versionDetails.runHref;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = versionDetails.runLabel;
+        return link;
+      })()
+      : (() => {
+        const text = document.createElement("span");
+        text.textContent = versionDetails.runLabel;
+        return text;
+      })();
+    versionBadge.appendChild(runNode);
+  }
+
+  const timestamp = document.createElement("span");
+  timestamp.textContent = ` • ${versionDetails.timestamp}`;
+  versionBadge.appendChild(timestamp);
 
   const pauseBtn = document.createElement("button");
   pauseBtn.textContent = "Pause";
@@ -163,7 +223,7 @@ export function buildUi(root: HTMLElement, grid: Grid): void {
   };
   requestAnimationFrame(updateFlowerCounter);
 
-  toolbar.append(toolGroup, actionGroup, flowerCounter);
+  toolbar.append(toolGroup, actionGroup, versionBadge, flowerCounter);
   root.append(toolbar, editPanel);
 
   const touchHost = root.parentElement ?? root;
