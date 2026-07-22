@@ -117,6 +117,70 @@ test("cycle_faucet rejects forged object ids without mutating flow state", () =>
   assert.equal(world.grid.getFaucetFlow(1, 1), 0);
 });
 
+test("cycle_faucet rejects when the membership index is empty despite the target cell carrying the object id", () => {
+  const { world, actorId } = createWorldWithPlayer();
+  const faucetObjectId = createObjectId("object_faucet_missing_membership");
+  const beforeWorldRevision = world.worldRevision;
+  const beforeInventoryRevision = world.players[actorId].inventoryRevision;
+  const beforeAuthorityOrder = world.nextAuthorityOrder;
+  world.grid.set(1, 1, MaterialId.Faucet, { objectId: faucetObjectId });
+  world.grid.setFaucetFlow(1, 1, 0);
+  world.grid.objectCellIndex.clear();
+
+  const envelope = createCommandEnvelope(actorId, 1, 0, {
+    type: "cycle_faucet",
+    x: 1,
+    y: 1,
+    objectId: faucetObjectId,
+    expectedTargetRevision: world.grid.cellRevisions[world.grid.index(1, 1)] ?? 0,
+  });
+
+  const result = processCommand(world, envelope);
+
+  assert.equal(result.kind, "rejected");
+  assert.equal(result.code, "target");
+  assert.equal(world.grid.getFaucetFlow(1, 1), 0);
+  assert.equal(world.worldRevision, beforeWorldRevision);
+  assert.equal(world.players[actorId].inventoryRevision, beforeInventoryRevision);
+  assert.equal(world.nextAuthorityOrder, beforeAuthorityOrder);
+});
+
+test("cycle_faucet rejects when the membership index omits the targeted cell", () => {
+  const { world, actorId } = createWorldWithPlayer();
+  const faucetObjectId = createObjectId("object_faucet_missing_target");
+  const beforeWorldRevision = world.worldRevision;
+  const beforeInventoryRevision = world.players[actorId].inventoryRevision;
+  const beforeAuthorityOrder = world.nextAuthorityOrder;
+  world.grid.set(1, 1, MaterialId.Faucet, { objectId: faucetObjectId });
+  world.grid.setFaucetFlow(1, 1, 0);
+  world.grid.set(2, 1, MaterialId.Faucet, { objectId: faucetObjectId });
+  world.grid.setFaucetFlow(2, 1, 0);
+  const targetIndex = world.grid.index(1, 1);
+  const peerIndex = world.grid.index(2, 1);
+  const cells = world.grid.objectCellIndex.get(faucetObjectId);
+  assert.ok(cells);
+  cells.delete(targetIndex);
+  assert.equal(cells.has(peerIndex), true);
+
+  const envelope = createCommandEnvelope(actorId, 1, 0, {
+    type: "cycle_faucet",
+    x: 1,
+    y: 1,
+    objectId: faucetObjectId,
+    expectedTargetRevision: world.grid.cellRevisions[targetIndex] ?? 0,
+  });
+
+  const result = processCommand(world, envelope);
+
+  assert.equal(result.kind, "rejected");
+  assert.equal(result.code, "target");
+  assert.equal(world.grid.getFaucetFlow(1, 1), 0);
+  assert.equal(world.grid.getFaucetFlow(2, 1), 0);
+  assert.equal(world.worldRevision, beforeWorldRevision);
+  assert.equal(world.players[actorId].inventoryRevision, beforeInventoryRevision);
+  assert.equal(world.nextAuthorityOrder, beforeAuthorityOrder);
+});
+
 test("rejected placement preserves inventory and leaves no partial writes", () => {
   const { world, actorId } = createWorldWithPlayer();
   const player = world.players[actorId];

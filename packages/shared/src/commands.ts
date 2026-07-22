@@ -898,17 +898,28 @@ export function validateCommand(world: WorldState, envelopeInput: unknown): Vali
         resultCode = revision === null ? "bounds" : "revision";
         break;
       }
+      const targetIndex = world.grid.index(envelope.command.x, envelope.command.y);
+      const indexedCells = world.grid.getObjectCellIndices(faucetObjectId);
+      if (indexedCells.length === 0 || !indexedCells.includes(targetIndex)) {
+        resultCode = "target";
+        break;
+      }
       const nextAux = (world.grid.getAuxiliaryValue(envelope.command.x, envelope.command.y) + 1) % 3;
-      gridWrites = world.grid.getObjectCells(faucetObjectId)
-        .filter(([x, y]) => world.grid.get(x, y) === MaterialId.Faucet && world.grid.getObjectId(x, y) === faucetObjectId)
-        .map(([x, y]) => ({
+      const writes: CommandGridWrite[] = [];
+      for (const index of indexedCells) {
+        const x = index % world.grid.width;
+        const y = Math.floor(index / world.grid.width);
+        if (world.grid.get(x, y) !== MaterialId.Faucet || world.grid.getObjectId(x, y) !== faucetObjectId) continue;
+        writes.push({
           x,
           y,
           id: MaterialId.Faucet,
           shade: world.grid.shade[world.grid.index(x, y)] ?? 0,
           auxiliary: nextAux,
           objectId: faucetObjectId,
-        }));
+        });
+      }
+      gridWrites = writes;
       acceptedEffect = "target";
       worldRevisionDelta = 1;
       break;
@@ -955,7 +966,7 @@ export function validateCommand(world: WorldState, envelopeInput: unknown): Vali
   }
 
   if (resultCode !== "accepted") {
-    return createRejection(envelope, resultCode, true);
+    return createRejection(envelope, resultCode, false);
   }
 
   return createPlan(
